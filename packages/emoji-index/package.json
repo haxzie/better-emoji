@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Offline emoji embedding index (all-MiniLM-L6-v2, int8) plus the encoder files the apps ship",
-  "files": ["dist", "models"],
+  "files": [
+    "dist",
+    "models"
+  ],
   "scripts": {
-    "build": "node scripts/build-index.mjs",
+    "build:index": "node scripts/build-index.mjs",
     "fetch-model": "node scripts/fetch-model.mjs",
     "gen-phrasings": "node scripts/gen-phrasings.mjs",
     "probe": "node scripts/probe.mjs"

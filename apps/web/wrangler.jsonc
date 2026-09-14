@@ -2,10 +2,28 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "better-emoji",
   "compatibility_date": "2026-09-01",
+  "observability": { "enabled": true },
+
+  // The picker is static. `main` only exists for the download paths — see
+  // server/index.ts — and `run_worker_first` keeps every other request on the
+  // asset host, where it is free and never waits on an isolate.
+  "main": "server/index.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/download", "/releases/*"]
   },
+
+  // Written by .github/workflows/release-mirror.yml (`releases/<version>/<zip>`
+  // and `releases/latest.json`), read by the Worker. Local dev sees an empty
+  // simulated bucket, so `/download` falls back to the GitHub releases page.
+  "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "better-emoji" }],
+
+  "vars": {
+    // Where `/download` sends people when the bucket has nothing to offer.
+    "GITHUB_REPO": "haxzie/better-emoji"
+  },
+
   "routes": [
     { "pattern": "emoji.haxzie.com", "custom_domain": true }
   ]

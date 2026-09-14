@@ -3,14 +3,18 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "pnpm --filter @emoji-search/web dev",
-    "build": "pnpm --filter @emoji-search/web build",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean",
     "ship": "pnpm --filter @emoji-search/web ship",
-    "typecheck": "pnpm -r --if-present typecheck",
-    "index:build": "pnpm --filter @emoji-search/index build",
+    "index:build": "pnpm --filter @emoji-search/index build:index",
     "index:fetch-model": "pnpm --filter @emoji-search/index fetch-model",
     "index:probe": "pnpm --filter @emoji-search/index probe",
-    "mac:build": "pnpm --filter @emoji-search/mac build",
-    "mac:run": "pnpm --filter @emoji-search/mac run"
+    "mac:build": "pnpm --filter @emoji-search/mac bundle",
+    "mac:run": "pnpm --filter @emoji-search/mac open"
+  },
+  "devDependencies": {
+    "turbo": "^2.10.9"
   }
 }

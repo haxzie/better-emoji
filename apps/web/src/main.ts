@@ -2,6 +2,7 @@ import './style.css';
 import type { EmojiEntry, EmojiMeta, Hit } from './types';
 import { KeywordIndex } from './keyword';
 import { SemanticSearch, type SemanticState } from './semantic';
+import { REPO_URL, fetchLatestRelease, fetchStars, formatSize, formatStars } from './site';
 
 const RESULT_LIMIT = 48;
 const SEMANTIC_CANDIDATES = 200; // ask for more than we show so keyword hits get a semantic score too
@@ -16,8 +17,45 @@ const RECENT_LIMIT = 24;
 // ---------------------------------------------------------------------------
 // Shell
 
+const APPLE_ICON = `<svg class="apple" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.7c-.02-2.36 1.93-3.5 2.02-3.55-1.1-1.61-2.81-1.83-3.42-1.86-1.46-.15-2.84.86-3.58.86-.74 0-1.88-.84-3.09-.82-1.59.02-3.05.93-3.87 2.35-1.65 2.86-.42 7.1 1.19 9.42.79 1.14 1.72 2.42 2.95 2.37 1.19-.05 1.63-.77 3.07-.77 1.43 0 1.83.77 3.09.75 1.27-.02 2.08-1.16 2.86-2.3.9-1.32 1.27-2.6 1.29-2.66-.03-.01-2.48-.95-2.51-3.79zM14.02 5.75c.65-.79 1.09-1.89.97-2.99-.94.04-2.08.63-2.75 1.42-.6.7-1.13 1.82-.99 2.9 1.05.08 2.12-.53 2.77-1.33z"/></svg>`;
+
+const GITHUB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.26 5.67.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>`;
+
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
+  <nav class="nav" aria-label="Site">
+    <a class="brand" href="/">
+      <img src="/favicon.png" width="28" height="28" alt="" />
+      <span>Better Emoji</span>
+    </a>
+    <div class="nav-actions">
+      <a class="gh" href="${REPO_URL}" target="_blank" rel="noopener" aria-label="Better Emoji on GitHub">
+        ${GITHUB_ICON}
+        <span class="gh-label">GitHub</span>
+        <span class="gh-stars" hidden aria-label="stars">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg>
+          <span class="gh-count"></span>
+        </span>
+      </a>
+      <a class="btn btn-sm" href="/download">${APPLE_ICON}<span>Download</span></a>
+    </div>
+  </nav>
+  <section class="hero">
+    <img class="hero-icon" src="/app-icon.png" width="96" height="96" alt="Better Emoji app icon" />
+    <h1>Find the right emoji by describing it.</h1>
+    <p class="hero-sub">
+      Type “ship it”, “feeling great” or “we won” and get 🚀 😀 🏆. Semantic search that runs
+      entirely on your Mac. No server, no tracking. A menu bar picker that opens with
+      <kbd>⌃⌥Space</kbd>, anywhere you type.
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-lg" href="/download">${APPLE_ICON}<span>Download for Mac</span></a>
+      <p class="hero-meta">
+        <span>macOS 14+</span><span>Apple Silicon</span><span>Free &amp; open source</span><span class="hero-version" hidden></span>
+      </p>
+    </div>
+    <p class="hero-try">Or try the search right here ↓</p>
+  </section>
   <header class="top">
     <label class="search" for="q">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -55,6 +93,20 @@ const results = $<HTMLElement>('#results');
 const detail = $<HTMLElement>('#detail');
 const popover = $<HTMLDivElement>('#popover');
 const toast = $<HTMLDivElement>('#toast');
+const searchBar = $<HTMLElement>('.top');
+
+fetchStars().then((n) => {
+  if (n === null) return;
+  $<HTMLSpanElement>('.gh-count').textContent = formatStars(n);
+  $<HTMLSpanElement>('.gh-stars').hidden = false;
+});
+
+fetchLatestRelease().then((release) => {
+  if (!release) return;
+  const el = $<HTMLSpanElement>('.hero-version');
+  el.textContent = `v${release.version} · ${formatSize(release.size)}`;
+  el.hidden = false;
+});
 
 // ---------------------------------------------------------------------------
 // Data
@@ -210,6 +262,7 @@ function onQueryChange() {
   if (q === currentQuery) return;
   currentQuery = q;
   syncUrl(q);
+  scrollPastHero(q);
   latestSemanticId++;
   clearTimeout(debounceTimer);
 
@@ -234,6 +287,17 @@ async function runSemantic(q: string) {
   lastSemanticMs = ms;
   renderStatus();
   showHits(merge(lastKeywordHits, hits), q);
+}
+
+// The hero sits above the search bar. Once someone types, scroll the bar to the
+// top so results aren't hidden below the fold — only when it's still below its
+// sticky position, so a later keystroke never yanks the page around.
+function scrollPastHero(q: string) {
+  if (!q) return;
+  const target = searchBar.offsetTop;
+  if (window.scrollY >= target) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: target, behavior: reduce ? 'auto' : 'smooth' });
 }
 
 // Keep ?q= in the address bar so searches are shareable / reload-safe.

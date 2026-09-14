@@ -6,12 +6,16 @@
 # The zip name contains "macOS" so the in-app updater (UpdateChecker.swift)
 # picks it up from the release assets.
 #
+# Once the release exists, release-mirror.yml copies the zip into R2 and
+# updates latest.json, which is what emoji.haxzie.com/download redirects to.
+#
 # Required secrets (run apps/mac/scripts/setup-release-secrets.sh once):
 #   MACOS_CERT_P12_BASE64   Developer ID Application cert + key, base64 .p12
 #   MACOS_CERT_PASSWORD     password for that .p12
 #   APPLE_API_KEY_P8        App Store Connect API key (.p8 contents)
 #   APPLE_API_KEY_ID        the key's ID
 #   APPLE_API_ISSUER_ID     the key's issuer ID
+# …plus the R2_* secrets release-mirror.yml lists (apps/web/scripts/setup-mirror-secrets.sh).
 
 name: Release
 
@@ -37,6 +41,8 @@ env:
 jobs:
   release:
     runs-on: macos-26
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -162,3 +168,17 @@ jobs:
         if: always()
         run: |
           [ -n "${KEYCHAIN:-}" ] && security delete-keychain "$KEYCHAIN" || true
+
+  # The R2 copy, and the manifest the site reads to find it.
+  #
+  # Invoked rather than left to `release: published`: the release above is
+  # created by this workflow's own GITHUB_TOKEN, and GitHub deliberately raises
+  # no event for those — the recursion guard — so nothing would ever run.
+  # `secrets: inherit` because the mirror needs the R2 keys, which this job
+  # never touches.
+  mirror:
+    needs: release
+    uses: ./.github/workflows/release-mirror.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit

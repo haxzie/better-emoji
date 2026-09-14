@@ -4,8 +4,8 @@
   "private": true,
   "description": "macOS menu bar emoji picker with on-device semantic search",
   "scripts": {
-    "build": "scripts/bundle.sh",
-    "run": "scripts/bundle.sh && open 'build/Emoji Search.app'",
+    "bundle": "scripts/bundle.sh",
+    "open": "scripts/bundle.sh && open 'build/Better Emoji.app'",
     "probe": "swift build -c release 2>/dev/null && .build/release/EmojiSearch --probe"
   },
   "devDependencies": {
