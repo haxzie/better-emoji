@@ -18,7 +18,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let hosting = NSHostingController(rootView: SettingsView())
         let win = NSWindow(contentViewController: hosting)
         win.title = "Emoji Search"
-        win.styleMask = [.titled, .closable, .miniaturizable]
+        win.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        win.minSize = NSSize(width: 480, height: 520)
+        win.setContentSize(NSSize(width: 480, height: 580))
         win.isReleasedWhenClosed = false
         win.center()
         super.init(window: win)
@@ -64,17 +66,20 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            Form {
-                generalSection
-                shortcutSection
-                permissionsSection
-                updateSection
+            ScrollView {
+                Form {
+                    generalSection
+                    shortcutSection
+                    permissionsSection
+                    updateSection
+                }
+                .formStyle(.grouped)
             }
-            .formStyle(.grouped)
+            .frame(minHeight: 360)
             Divider()
             footer
         }
-        .frame(width: 460)
+        .frame(width: 480)
         .onAppear { accessibilityGranted = AXIsProcessTrusted() }
     }
 

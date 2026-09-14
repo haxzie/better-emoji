@@ -26,6 +26,28 @@ pnpm mac:run               # → apps/mac/build/Emoji Search.app
 and encoder in from `packages/emoji-index`, and ad-hoc signs it. Requires macOS 14+ and
 Xcode 15+. No Xcode project — it's a plain SwiftPM package.
 
+## Release
+
+`.github/workflows/release.yml` builds, signs (Developer ID + hardened runtime), notarizes,
+staples and publishes `Emoji-Search-macOS-v<version>.zip` as a GitHub release. The in-app
+updater (Settings → Updates) looks for exactly that asset on the latest release.
+
+```
+git tag v0.2.0 && git push origin v0.2.0      # or run the workflow manually with a version
+```
+
+One-time setup — pushes the cert + notarization key from `~/keys` to the repo's secrets:
+
+```
+apps/mac/scripts/setup-release-secrets.sh
+```
+
+To produce a signed build locally:
+
+```
+VERSION=0.2.0 SIGN_IDENTITY="Developer ID Application: …" bash scripts/bundle.sh
+```
+
 ## How it runs the model
 
 `Embedder.swift` loads `model_quantized.onnx` with
