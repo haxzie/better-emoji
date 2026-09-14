@@ -59,6 +59,7 @@ jobs:
             echo "version=$VERSION"
             echo "tag=v$VERSION"
             echo "zip=Better-Emoji-macOS-v$VERSION.zip"
+            echo "dmg=Better-Emoji-macOS-v$VERSION.dmg"
           } >> "$GITHUB_OUTPUT"
 
       # ── JS: emoji index + encoder ──────────────────────────────────────────
@@ -118,37 +119,65 @@ jobs:
         run: bash scripts/bundle.sh
 
       # ── Notarize + staple ──────────────────────────────────────────────────
-      - name: Notarize
+      # Two artefacts: the zip is what the in-app updater unpacks in place; the
+      # DMG is what a person downloads from the site. The app is notarized and
+      # stapled first, then the DMG that wraps it is notarized and stapled too,
+      # so both open cleanly with no network round-trip to Apple.
+      - name: Notarize app, build DMG, notarize DMG
         working-directory: apps/mac
         env:
           API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          DMG: ${{ steps.v.outputs.dmg }}
         run: |
           KEY="$RUNNER_TEMP/AuthKey.p8"
           echo "$API_KEY_P8" > "$KEY"
+
+          notarize() {  # notarize <file>
+            xcrun notarytool submit "$1" \
+              --key "$KEY" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" \
+              --wait --timeout 30m --output-format json | tee "$RUNNER_TEMP/notary.json"
+            local id status
+            id=$(jq -r .id "$RUNNER_TEMP/notary.json")
+            status=$(jq -r .status "$RUNNER_TEMP/notary.json")
+            if [ "$status" != "Accepted" ]; then
+              echo "::error::Notarization of $1: $status"
+              xcrun notarytool log "$id" --key "$KEY" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID"
+              exit 1
+            fi
+          }
+
+          # 1. The app
           ditto -c -k --keepParent "build/$APP.app" "$RUNNER_TEMP/notarize.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-            --key "$KEY" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" \
-            --wait --timeout 30m --output-format json | tee "$RUNNER_TEMP/notary.json"
-          ID=$(jq -r .id "$RUNNER_TEMP/notary.json")
-          STATUS=$(jq -r .status "$RUNNER_TEMP/notary.json")
-          if [ "$STATUS" != "Accepted" ]; then
-            echo "::error::Notarization $STATUS"
-            xcrun notarytool log "$ID" --key "$KEY" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID"
-            exit 1
-          fi
-          rm -f "$KEY"
+          notarize "$RUNNER_TEMP/notarize.zip"
           xcrun stapler staple "build/$APP.app"
           spctl --assess --type execute --verbose=2 "build/$APP.app"
+
+          # 2. The DMG: stapled app + an Applications shortcut to drag it onto.
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          ditto "build/$APP.app" "$STAGE/$APP.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "$APP" -srcfolder "$STAGE" -ov -quiet \
+            -fs HFS+ -format UDZO -imagekey zlib-level=9 "build/$DMG"
+          codesign --force --timestamp --identifier com.haxzie.better-emoji.dmg --sign "$SIGN_IDENTITY" "build/$DMG"
+          notarize "build/$DMG"
+          xcrun stapler staple "build/$DMG"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "build/$DMG"
+
+          rm -f "$KEY"
 
       - name: Package
         working-directory: apps/mac
         env:
           ZIP: ${{ steps.v.outputs.zip }}
+          DMG: ${{ steps.v.outputs.dmg }}
         run: |
           ditto -c -k --keepParent "build/$APP.app" "build/$ZIP"
           shasum -a 256 "build/$ZIP" | tee "build/$ZIP.sha256"
+          shasum -a 256 "build/$DMG" | tee "build/$DMG.sha256"
+          ls -la build/*.zip build/*.dmg
 
       # ── Publish ────────────────────────────────────────────────────────────
       - name: Create GitHub release
@@ -156,9 +185,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.v.outputs.tag }}
           ZIP: ${{ steps.v.outputs.zip }}
+          DMG: ${{ steps.v.outputs.dmg }}
         run: |
           # For workflow_dispatch the tag doesn't exist yet; gh creates it at this commit.
           gh release create "$TAG" \
+            "apps/mac/build/$DMG" "apps/mac/build/$DMG.sha256" \
             "apps/mac/build/$ZIP" "apps/mac/build/$ZIP.sha256" \
             --target "$GITHUB_SHA" \
             --title "Better Emoji $TAG" \

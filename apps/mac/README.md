@@ -29,7 +29,7 @@ Xcode 15+. No Xcode project — it's a plain SwiftPM package.
 ## Release
 
 `.github/workflows/release.yml` builds, signs (Developer ID + hardened runtime), notarizes,
-staples and publishes `Better-Emoji-macOS-v<version>.zip` as a GitHub release. The in-app
+staples and publishes a DMG (for people) and a zip (for the updater) as a GitHub release. The in-app
 updater (Settings → Updates) looks for exactly that asset on the latest release.
 
 ```

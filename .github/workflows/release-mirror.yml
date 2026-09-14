@@ -84,13 +84,21 @@ jobs:
           # the .sha256 beside it is folded into latest.json instead.
           mkdir -p dist
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern '*macOS*.zip' --dir dist
+            --pattern '*macOS*.zip' --pattern '*macOS*.dmg' --dir dist
           count=$(ls dist/*.zip 2>/dev/null | wc -l | tr -d ' ')
           if [ "$count" != "1" ]; then
             echo "::error::expected exactly one macOS zip in $TAG, found $count."
             exit 1
           fi
           file=$(basename "$(ls dist/*.zip)")
+          # The DMG is what people download from the site; releases before 0.3.0 have none.
+          dmg=""
+          if ls dist/*.dmg >/dev/null 2>&1; then
+            dmg=$(basename "$(ls dist/*.dmg)")
+            echo "dmg=$dmg"
+            echo "dmg_size=$(stat -c%s "dist/$dmg")"
+            echo "dmg_sha256=$(sha256sum "dist/$dmg" | cut -d' ' -f1)"
+          fi >> "$GITHUB_OUTPUT"
 
           # Read from the release rather than from the event payload, so a
           # manual re-run carries the timestamp the automatic one would have.
@@ -142,6 +150,13 @@ jobs:
             --content-type application/zip \
             --cache-control "public, max-age=31536000, immutable" \
             --only-show-errors
+          if [ -n "${DMG:-}" ]; then
+            aws s3 cp "dist/$DMG" "s3://$BUCKET/$PREFIX/$VERSION/$DMG" \
+              --endpoint-url "https://$ACCOUNT_ID.r2.cloudflarestorage.com" \
+              --content-type application/x-apple-diskimage \
+              --cache-control "public, max-age=31536000, immutable" \
+              --only-show-errors
+          fi
 
       - name: Update latest.json
         env:
@@ -154,8 +169,13 @@ jobs:
           SIZE: ${{ steps.release.outputs.size }}
           SHA256: ${{ steps.release.outputs.sha256 }}
           PUBLISHED_AT: ${{ steps.release.outputs.published_at }}
+          DMG: ${{ steps.release.outputs.dmg }}
+          DMG_SIZE: ${{ steps.release.outputs.dmg_size }}
+          DMG_SHA256: ${{ steps.release.outputs.dmg_sha256 }}
         run: |
           set -eu
+          # `url`/`size`/`sha256` are the zip — that's what the in-app updater reads.
+          # `dmg` is what the site's /download button hands to people.
           jq -n \
             --arg version "$VERSION" \
             --arg tag "$TAG" \
@@ -164,6 +184,10 @@ jobs:
             --arg url "$PUBLIC_URL/$PREFIX/$VERSION/$FILE" \
             --arg sha256 "$SHA256" \
             --argjson size "$SIZE" \
+            --arg dmg "$DMG" \
+            --arg dmgUrl "$PUBLIC_URL/$PREFIX/$VERSION/$DMG" \
+            --arg dmgSha256 "$DMG_SHA256" \
+            --argjson dmgSize "${DMG_SIZE:-0}" \
             '{
               version: $version,
               tag: $tag,
@@ -173,7 +197,9 @@ jobs:
               url: $url,
               size: $size,
               sha256: $sha256
-            }' > latest.json
+            } + (if $dmg == "" then {} else
+              { dmg: { filename: $dmg, url: $dmgUrl, size: $dmgSize, sha256: $dmgSha256 } }
+            end)' > latest.json
           cat latest.json
 
           # Short TTL: this is the one object that changes, and a release nobody
@@ -192,10 +218,15 @@ jobs:
         env:
           VERSION: ${{ steps.release.outputs.version }}
           FILE: ${{ steps.release.outputs.file }}
+          DMG: ${{ steps.release.outputs.dmg }}
         run: |
           set -eu
           curl -fsSL "$PUBLIC_URL/$PREFIX/latest.json" | tee /dev/stderr | grep -q "\"version\": *\"$VERSION\""
-          code=$(curl -sIL -o /dev/null -w '%{http_code}' "$PUBLIC_URL/$PREFIX/$VERSION/$FILE")
-          [ "$code" = "200" ] || { echo "::error::$PUBLIC_URL/$PREFIX/$VERSION/$FILE returned $code"; exit 1; }
+          for f in "$FILE" ${DMG:+"$DMG"}; do
+            code=$(curl -sIL -o /dev/null -w '%{http_code}' "$PUBLIC_URL/$PREFIX/$VERSION/$f")
+            [ "$code" = "200" ] || { echo "::error::$PUBLIC_URL/$PREFIX/$VERSION/$f returned $code"; exit 1; }
+          done
+          # /download hands people the DMG when there is one, else the zip.
+          want="$PUBLIC_URL/$PREFIX/$VERSION/${DMG:-$FILE}"
           location=$(curl -sI -o /dev/null -w '%{redirect_url}' "$PUBLIC_URL/download")
-          [ "$location" = "$PUBLIC_URL/$PREFIX/$VERSION/$FILE" ] || { echo "::error::/download points at $location"; exit 1; }
+          [ "$location" = "$want" ] || { echo "::error::/download points at $location, expected $want"; exit 1; }

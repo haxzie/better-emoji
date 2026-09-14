@@ -4,7 +4,7 @@
 // code ever running — `run_worker_first` in wrangler.jsonc lists the only paths
 // that reach it:
 //
-//   /download              302 → the current macOS build
+//   /download              302 → the current macOS build (DMG; zip for old releases)
 //   /releases/latest.json  the manifest the release workflow writes to R2
 //   /releases/<v>/<file>   the build itself, streamed from R2
 //
@@ -25,7 +25,10 @@ const PREFIX = 'releases';
 /** Shape of latest.json — the parts read here; the workflow writes more. */
 interface Manifest {
   version?: unknown;
+  /** The zip — what the in-app updater installs. */
   url?: unknown;
+  /** The DMG — what people download. Absent on releases before 0.3.0. */
+  dmg?: { url?: unknown };
 }
 
 /**
@@ -72,8 +75,10 @@ async function download(request: Request, env: Env): Promise<Response> {
   try {
     const object = await env.RELEASES.get(`${PREFIX}/latest.json`);
     const manifest = object ? ((await object.json()) as Manifest) : null;
-    if (typeof manifest?.url === 'string') {
-      const { pathname } = new URL(manifest.url, origin);
+    // People get the DMG (drag to Applications); the zip exists for the updater.
+    const candidate = manifest?.dmg?.url ?? manifest?.url;
+    if (typeof candidate === 'string') {
+      const { pathname } = new URL(candidate, origin);
       if (pathname.startsWith(`/${PREFIX}/`)) target = origin + pathname;
     }
   } catch (error) {
