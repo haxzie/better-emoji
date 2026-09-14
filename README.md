@@ -33,7 +33,7 @@ The index itself (`packages/emoji-index/dist`) is committed, so you only need
 
 | Script | What |
 |---|---|
-| `pnpm dev` / `pnpm build` / `pnpm deploy` | Web app |
+| `pnpm dev` / `pnpm build` / `pnpm ship` | Web app |
 | `pnpm index:build` | Rebuild the embedding index |
 | `pnpm index:fetch-model` | Download the encoder files |
 | `pnpm index:probe "query" …` | Print top semantic hits from Node |

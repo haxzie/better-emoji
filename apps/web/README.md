@@ -61,7 +61,7 @@ pnpm index:build
 |---|---|
 | `pnpm dev` | Vite dev server |
 | `pnpm build` | Production build to `dist/` |
-| `pnpm deploy` | Build and deploy to Cloudflare Workers (emoji.haxzie.com) |
+| `pnpm ship` | Build and deploy to Cloudflare Workers (emoji.haxzie.com) |
 | `pnpm typecheck` | `tsc` |
 | `pnpm index:build` (root) | Rebuild the embedding index |
 | `pnpm index:probe "query" …` (root) | Print top semantic hits from Node (no browser) |

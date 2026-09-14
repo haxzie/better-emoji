@@ -11,7 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p .",
-    "deploy": "pnpm build && wrangler deploy"
+    "ship": "pnpm build && wrangler deploy"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0"
