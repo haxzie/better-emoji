@@ -6,3 +6,4 @@ dist
 .build
 .turbo
 apps/mac/dmg/background.tiff
+.astro

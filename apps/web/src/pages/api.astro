@@ -1,0 +1,130 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Better Emoji API — semantic emoji search over HTTP';
+const description =
+  'A free JSON API that turns a phrase like “ship it” into ranked emoji. One GET request, no key, CORS enabled, 60 requests a minute.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebAPI',
+  name: 'Better Emoji API',
+  description,
+  url: 'https://emoji.haxzie.com/api',
+  documentation: 'https://emoji.haxzie.com/api',
+  provider: { '@type': 'Person', name: 'Musthaq Ahamad', url: 'https://haxzie.com' },
+  termsOfService: 'https://github.com/haxzie/better-emoji',
+};
+
+const example = {
+  query: 'ship it',
+  model: '@cf/baai/bge-small-en-v1.5',
+  took_ms: 41,
+  results: [
+    { emoji: '📦️', name: 'package', group: 'objects', score: 0.612 },
+    { emoji: '🚢', name: 'ship', group: 'travel-places', score: 0.598 },
+    { emoji: '🚚', name: 'delivery truck', group: 'travel-places', score: 0.571 },
+    { emoji: '🚀', name: 'rocket', group: 'travel-places', score: 0.553 },
+  ],
+};
+---
+
+<Base {title} {description} path="/api" {jsonLd}>
+  <article class="doc">
+    <header class="doc-head">
+      <p class="eyebrow">API</p>
+      <h1>Semantic emoji search over HTTP</h1>
+      <p class="lede">
+        The same search that powers the app, as one GET request. Describe what you mean —
+        <em>“ship it”</em>, <em>“feeling great”</em>, <em>“we won”</em> — and get ranked emoji back as JSON.
+        Free, no key, CORS enabled.
+      </p>
+      <pre class="code"><code>curl "https://emoji.haxzie.com/api/v1/search?q=ship+it&amp;limit=4"</code></pre>
+    </header>
+
+    <section>
+      <h2 id="search"><code>GET /api/v1/search</code></h2>
+      <p>Rank emoji for a phrase.</p>
+      <table>
+        <thead><tr><th>Query parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>q</code></td><td>string, required</td><td>The phrase to search for. Up to 200 characters. Any language works, English works best.</td></tr>
+          <tr><td><code>limit</code></td><td>integer, optional</td><td>How many results to return. <code>1</code>–<code>50</code>, default <code>10</code>.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Response</h3>
+      <pre class="code"><code set:html={JSON.stringify(example, null, 2)} /></pre>
+      <table>
+        <thead><tr><th>Field</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>results[].emoji</code></td><td>The emoji character. May include a variation selector (U+FE0F).</td></tr>
+          <tr><td><code>results[].name</code></td><td>Its CLDR name.</td></tr>
+          <tr><td><code>results[].group</code></td><td>Category: <code>smileys-emotion</code>, <code>people-body</code>, <code>animals-nature</code>, <code>food-drink</code>, <code>travel-places</code>, <code>activities</code>, <code>objects</code>, <code>symbols</code>, <code>flags</code>.</td></tr>
+          <tr><td><code>results[].skins</code></td><td>Skin-tone variants, when the emoji has them. Omitted otherwise.</td></tr>
+          <tr><td><code>results[].score</code></td><td>Relevance. Semantic similarity plus a boost for literal name/keyword matches; higher is better, only meaningful relative to the other results for the same query.</td></tr>
+          <tr><td><code>took_ms</code></td><td>Server time for this request. Repeated queries are served from the edge cache in ~0 ms.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="status"><code>GET /api/v1/status</code></h2>
+      <p>The model in use, how many emoji are indexed, and when the index was last rebuilt.</p>
+      <pre class="code"><code>{`{ "model": "@cf/baai/bge-small-en-v1.5", "dimensions": 384, "emoji": 1914, "updated_at": "…", "rate_limit": "60 requests / minute / IP" }`}</code></pre>
+    </section>
+
+    <section>
+      <h2 id="errors">Errors</h2>
+      <p>Errors are JSON with an <code>error</code> code and a human-readable <code>message</code>.</p>
+      <table>
+        <thead><tr><th>Status</th><th><code>error</code></th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td>400</td><td><code>missing_query</code></td><td><code>q</code> is missing or empty.</td></tr>
+          <tr><td>404</td><td><code>not_found</code></td><td>No such endpoint.</td></tr>
+          <tr><td>429</td><td><code>rate_limited</code></td><td>More than 60 requests in a minute from one IP. Wait for <code>Retry-After</code> seconds.</td></tr>
+          <tr><td>503</td><td><code>index_empty</code></td><td>The index is being rebuilt. Retry shortly.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="limits">Limits &amp; caching</h2>
+      <ul>
+        <li><strong>60 requests per minute per IP.</strong> Enough for typing-as-you-search from a client; debounce on your side. Need more? <a href="https://github.com/haxzie/better-emoji/issues">Open an issue</a>.</li>
+        <li>Identical queries are cached at the edge for an hour, so a popular phrase never reaches the model twice.</li>
+        <li>CORS is open (<code>Access-Control-Allow-Origin: *</code>): call it straight from a browser.</li>
+        <li>No authentication, no tracking. Requests aren't logged beyond Cloudflare's standard metrics.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="how">How it works</h2>
+      <p>
+        Each emoji is described by its CLDR name, keywords and a handful of natural phrasings
+        (“let's celebrate”, “shipping a release”). Those descriptions are embedded once with
+        <a href="https://huggingface.co/BAAI/bge-small-en-v1.5">bge-small-en-v1.5</a> and stored.
+        Your query is embedded on Cloudflare Workers AI at request time and compared against all
+        1,914 vectors in memory; a prefix search over names and keywords is blended in so that
+        exact and partial words (“cele”) still win. The whole thing is
+        <a href="https://github.com/haxzie/better-emoji">open source</a>.
+      </p>
+      <p>
+        The Mac app and this website run the same ranking on-device with a different encoder
+        (all-MiniLM-L6-v2), so results can differ slightly from the API.
+      </p>
+    </section>
+
+    <section>
+      <h2 id="examples">Examples</h2>
+      <h3>JavaScript</h3>
+      <pre class="code"><code>{`const r = await fetch('https://emoji.haxzie.com/api/v1/search?q=' + encodeURIComponent('mind blown'));
+const { results } = await r.json();
+console.log(results.map((e) => e.emoji).join(' ')); // 🤯 🤩 💭 …`}</code></pre>
+      <h3>Python</h3>
+      <pre class="code"><code>{`import requests
+r = requests.get("https://emoji.haxzie.com/api/v1/search", params={"q": "coffee break", "limit": 3})
+print(" ".join(e["emoji"] for e in r.json()["results"]))  # ☕️ 🥤 🍻`}</code></pre>
+    </section>
+  </article>
+</Base>

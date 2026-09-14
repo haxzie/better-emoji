@@ -1,15 +1,5 @@
-export interface EmojiEntry {
-  /** The emoji character itself */
-  c: string;
-  /** CLDR name, e.g. "grinning face" */
-  n: string;
-  /** CLDR keywords */
-  t: string[];
-  /** emojibase group id */
-  g: number;
-  /** Skin-tone variants, if any */
-  s?: string[];
-}
+import type { EmojiEntry, Hit } from '../shared/types';
+export type { EmojiEntry, Hit };
 
 export interface EmojiMeta {
   model: string;
@@ -18,9 +8,6 @@ export interface EmojiMeta {
   groups: Record<string, string>;
   emoji: EmojiEntry[];
 }
-
-/** [emoji index, score] */
-export type Hit = [number, number];
 
 export type WorkerRequest =
   | { type: 'init'; indexUrl: string; model: string; dim: number; count: number }

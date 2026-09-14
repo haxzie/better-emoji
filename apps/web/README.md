@@ -48,14 +48,33 @@ pnpm index:build
 
 ## The Worker (`server/`)
 
-`wrangler.jsonc` serves `dist/` as static assets and routes just three paths to
-`server/index.ts` (`run_worker_first`):
+The site is [Astro](https://astro.build) with `output: 'static'`: every page is plain
+HTML in `dist/` (indexable, free on Workers Static Assets). `src/pages/index.astro` holds the
+picker markup and loads `src/picker.ts` as a client script; `src/pages/api.astro` is the API
+docs. `wrangler.jsonc` routes only these paths to `server/index.ts` (`run_worker_first`):
 
 | Path | What |
 |---|---|
-| `/download` | 302 to the URL in `releases/latest.json`; falls back to the GitHub releases page |
+| `/download` | 302 to the DMG in `releases/latest.json`; falls back to the GitHub releases page |
 | `/releases/latest.json` | The manifest `release-mirror.yml` writes to the `better-emoji` R2 bucket |
-| `/releases/<version>/<zip>` | The build, streamed from R2 and cached at the edge |
+| `/releases/<version>/<file>` | The build, streamed from R2 and cached at the edge |
+| `/api/v1/*` | The search API — `server/api.ts` |
+
+### The search API
+
+`GET /api/v1/search?q=ship+it&limit=10` embeds the query with Workers AI
+(`@cf/baai/bge-small-en-v1.5`), scores it against every emoji vector held in memory
+(loaded once per isolate from D1), blends in the same keyword prefix search the picker uses
+(`shared/`), and returns JSON. 60 requests/min per IP via the rate-limit binding; identical
+queries are edge-cached for an hour. Docs live at `/api`.
+
+Rebuild the index (after changing phrasings, or the model) — it embeds every emoji's
+descriptions through Workers AI and upserts D1 in chunks of 50:
+
+```
+ADMIN_TOKEN=… node scripts/seed-api.mjs            # the token is a Worker secret: wrangler secret put ADMIN_TOKEN
+npx wrangler d1 execute better-emoji --remote --file server/schema.sql   # first time only
+```
 
 `src/site.ts` reads `/releases/latest.json` for the version badge under the hero button and
 `api.github.com` (client-side, cached an hour in localStorage) for the star count. Both
@@ -100,12 +119,13 @@ manual deploy from a logged-in wrangler.
 
 | Script | What |
 |---|---|
-| `pnpm dev` | Vite dev server |
-| `pnpm build` | Production build to `dist/` |
+| `pnpm dev` | Astro dev server |
+| `pnpm build` | Static build to `dist/` (runs `scripts/sync-assets.mjs` first) |
 | `pnpm dev:worker` | Build, then `wrangler dev` (static assets + the Worker) |
 | `pnpm ship` | Build and deploy to Cloudflare Workers by hand (emoji.haxzie.com) |
 | `pnpm build:cf` | What Workers Builds runs: fetch the encoder, then the turbo build from the workspace root |
-| `pnpm typecheck` | `tsc` for the site and the Worker |
+| `pnpm typecheck` | `astro sync` + `tsc` for the site, `shared/` and the Worker (`astro check` needs TS 6) |
+| `node scripts/seed-api.mjs` | Rebuild the API's D1 index through Workers AI |
 | `pnpm index:build` (root) | Rebuild the embedding index |
 | `pnpm index:probe "query" …` (root) | Print top semantic hits from Node (no browser) |
 

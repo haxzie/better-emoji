@@ -7,6 +7,7 @@
 //   /download              302 → the current macOS build (DMG; zip for old releases)
 //   /releases/latest.json  the manifest the release workflow writes to R2
 //   /releases/<v>/<file>   the build itself, streamed from R2
+//   /api/v1/*              the search API — see api.ts
 //
 // `.github/workflows/release-mirror.yml` is the other half: it copies each
 // GitHub release's zip into the `better-emoji` bucket and rewrites latest.json.
@@ -14,7 +15,9 @@
 // the bucket exists so the site's download button never depends on GitHub's
 // API rate limit or its release CDN.
 
-interface Env {
+import { api, type ApiEnv } from './api';
+
+interface Env extends ApiEnv {
   RELEASES: R2Bucket;
   GITHUB_REPO: string;
 }
@@ -40,6 +43,8 @@ const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/;
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith('/api/')) return api(request, env, ctx);
 
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response('Method Not Allowed', { status: 405, headers: { allow: 'GET, HEAD' } });

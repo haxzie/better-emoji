@@ -1,0 +1,75 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Better Emoji — search emojis semantically';
+const description =
+  'Find the right emoji by describing it. Type “ship it”, “feeling great” or “we won” and get 🚀 😀 🏆 — semantic emoji search for macOS and the web, with a free API.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Better Emoji',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'macOS 14+',
+  description,
+  url: 'https://emoji.haxzie.com/',
+  downloadUrl: 'https://emoji.haxzie.com/download',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@type': 'Person', name: 'Musthaq Ahamad', url: 'https://haxzie.com' },
+};
+---
+
+<Base {title} {description} path="/" {jsonLd}>
+  <link slot="head" rel="preload" href="/emoji-meta.json" as="fetch" crossorigin />
+
+  <section class="hero">
+    <img class="hero-icon" src="/app-icon.png" width="96" height="96" alt="Better Emoji app icon" />
+    <h1>Find the right emoji by describing it.</h1>
+    <p class="hero-sub">
+      Type “ship it”, “feeling great” or “we won” and get 🚀 😀 🏆. Semantic search that runs
+      entirely on your Mac. No server, no tracking. A menu bar picker that opens with
+      <kbd>⌃⌥Space</kbd>, anywhere you type.
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-lg" href="/download">
+        <svg class="apple" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.7c-.02-2.36 1.93-3.5 2.02-3.55-1.1-1.61-2.81-1.83-3.42-1.86-1.46-.15-2.84.86-3.58.86-.74 0-1.88-.84-3.09-.82-1.59.02-3.05.93-3.87 2.35-1.65 2.86-.42 7.1 1.19 9.42.79 1.14 1.72 2.42 2.95 2.37 1.19-.05 1.63-.77 3.07-.77 1.43 0 1.83.77 3.09.75 1.27-.02 2.08-1.16 2.86-2.3.9-1.32 1.27-2.6 1.29-2.66-.03-.01-2.48-.95-2.51-3.79zM14.02 5.75c.65-.79 1.09-1.89.97-2.99-.94.04-2.08.63-2.75 1.42-.6.7-1.13 1.82-.99 2.9 1.05.08 2.12-.53 2.77-1.33z"/></svg>
+        <span>Download for Mac</span>
+      </a>
+      <p class="hero-meta">
+        <span>macOS 14+</span><span>Apple Silicon</span><span>Free &amp; open source</span><span class="hero-version" hidden></span>
+      </p>
+    </div>
+    <p class="hero-try">Or try the search right here ↓ <a href="/api">Need it in your app? There's an API.</a></p>
+  </section>
+
+  <header class="top">
+    <label class="search" for="q">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+      </svg>
+      <input id="q" type="text" placeholder="Search emoji… try “ship it” or “feeling great”" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" autofocus />
+      <kbd class="hint" aria-hidden="true">↵ copies</kbd>
+      <button class="clear" type="button" aria-label="Clear search" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </label>
+    <div class="status" role="status" aria-live="polite">
+      <span class="dot"></span>
+      <span class="status-text">Loading…</span>
+    </div>
+  </header>
+  <main class="results" id="results"></main>
+  <aside class="detail" id="detail" hidden>
+    <span class="detail-emoji"></span>
+    <div class="detail-body">
+      <div class="detail-name"></div>
+      <div class="detail-tags"></div>
+    </div>
+  </aside>
+  <div class="popover" id="popover" hidden role="menu"></div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    import '../picker';
+  </script>
+</Base>

@@ -6,13 +6,13 @@
   "scripts": {
     "sync": "node scripts/sync-assets.mjs",
     "predev": "node scripts/sync-assets.mjs",
-    "dev": "vite",
+    "dev": "astro dev",
     "prebuild": "node scripts/sync-assets.mjs",
-    "build": "vite build",
+    "build": "astro build",
     "build:cf": "pnpm -w index:fetch-model && pnpm -w build --filter=@emoji-search/web",
-    "preview": "vite preview",
+    "preview": "astro preview",
     "dev:worker": "pnpm build && wrangler dev",
-    "typecheck": "tsc -p . && tsc -p server",
+    "typecheck": "astro sync && tsc -p . && tsc -p server",
     "ship": "pnpm build && wrangler deploy",
     "clean": "rm -rf dist .turbo .wrangler"
   },
@@ -20,8 +20,10 @@
     "@huggingface/transformers": "^4.2.0"
   },
   "devDependencies": {
+    "@astrojs/sitemap": "^3.7.4",
     "@cloudflare/workers-types": "^5.20260914.1",
     "@emoji-search/index": "workspace:*",
+    "astro": "^7.3.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "wrangler": "^4.131.1"

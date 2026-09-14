@@ -1,15 +1,9 @@
 {
+  "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
-    "strict": true,
-    "noEmit": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "types": ["vite/client"]
+    "types": ["astro/client"]
   },
-  "include": ["src"]
+  "include": [".astro/types.d.ts", "src", "shared", "astro.config.mjs"],
+  "exclude": ["dist", "server", "scripts", "node_modules"]
 }

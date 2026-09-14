@@ -11,13 +11,19 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/download", "/releases/*"]
+    "run_worker_first": ["/download", "/releases/*", "/api/*"]
   },
 
   // Written by .github/workflows/release-mirror.yml (`releases/<version>/<zip>`
   // and `releases/latest.json`), read by the Worker. Local dev sees an empty
   // simulated bucket, so `/download` falls back to the GitHub releases page.
   "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "better-emoji" }],
+
+  // Search API (server/api.ts): query embeddings from Workers AI, emoji vectors in
+  // D1 (seeded by scripts/seed-api.mjs), 60 requests/min per IP.
+  "ai": { "binding": "AI" },
+  "d1_databases": [{ "binding": "DB", "database_name": "better-emoji", "database_id": "38f33cdb-7eef-45ba-955c-18b26af4feab" }],
+  "ratelimits": [{ "name": "SEARCH_LIMITER", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }],
 
   "vars": {
     // Where `/download` sends people when the bucket has nothing to offer.
