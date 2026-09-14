@@ -82,7 +82,10 @@ struct SettingsView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            Text("😼").font(.system(size: 52))
+            Image(nsImage: NSImage(byReferencing: Bundle.module.url(forResource: "logo", withExtension: "png")!))
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 56, height: 56)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Emoji Search")
                     .font(.title2.bold())

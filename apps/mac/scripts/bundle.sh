@@ -22,7 +22,18 @@ cp .build/release/EmojiSearch "$APP/Contents/MacOS/EmojiSearch"
 cp Info.plist "$APP/Contents/"
 cp "$INDEX_PKG/dist/emoji-index.bin" "$INDEX_PKG/dist/emoji-meta.json" "$APP/Contents/Resources/"
 cp "$MODEL_DIR/onnx/model_quantized.onnx" "$MODEL_DIR/tokenizer.json" "$APP/Contents/Resources/"
-[ -f AppIcon.icns ] && cp AppIcon.icns "$APP/Contents/Resources/"
+# SwiftPM resource bundle (Settings-window logo); Bundle.module looks for it in Contents/Resources.
+cp -R .build/release/EmojiSearch_EmojiSearch.bundle "$APP/Contents/Resources/"
+
+# Build AppIcon.icns from the 1024px AppIcon.png (already masked to the macOS rounded-square shape).
+ICONSET="build/AppIcon.iconset"
+rm -rf "$ICONSET" && mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+  sips -z $size $size AppIcon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size*2)) $((size*2)) AppIcon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
 
 codesign --force --sign - "$APP" 2>/dev/null
 echo "built $APP ($(du -sh "$APP" | cut -f1))"

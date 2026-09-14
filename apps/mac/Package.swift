@@ -14,6 +14,7 @@ let package = Package(
                 .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
             ],
             path: "Sources/EmojiSearch",
+            resources: [.copy("Resources/logo.png")],
         ),
     ],
     swiftLanguageVersions: [.v5]
