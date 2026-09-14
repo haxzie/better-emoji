@@ -278,6 +278,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func statusItemClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             showMenu()
+        } else if let button = statusItem?.button, let win = button.window {
+            togglePanel(anchor: win.convertToScreen(button.convert(button.bounds, to: nil)))
         } else {
             toggle()
         }
@@ -330,11 +332,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Panel
 
-    @objc private func toggle() {
+    @objc private func toggle() { togglePanel(anchor: nil) }
+
+    private func togglePanel(anchor: NSRect?) {
         if panel.isVisible {
             panel.hide()
         } else {
-            panel.show()
+            panel.show(anchor: anchor)
             panelState.shownCount += 1
         }
     }

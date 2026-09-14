@@ -52,15 +52,20 @@ struct PickerView: View {
     private var visible: [Emoji] { sections.flatMap(\.emoji) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            searchBar
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-            Divider()
-            grid
-            Divider()
-            footer
-        }
+        // The grid runs the full height; the bars float over it on a blur that fades
+        // into the emoji, so scrolled content dissolves under them instead of hitting a line.
+        grid
+            .safeAreaInset(edge: .top, spacing: 0) {
+                searchBar
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    .background(ProgressiveBlur(edge: .top).padding(.bottom, -28))
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                footer
+                    .background(ProgressiveBlur(edge: .bottom).padding(.top, -28))
+            }
         .frame(width: Self.width, height: Self.height)
         .modifier(PanelChrome())
         .onAppear { recent = engine.store.recent }
@@ -76,11 +81,13 @@ struct PickerView: View {
     // MARK: - Search bar
 
     private var searchBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.secondary)
             TextField("Search Emoji", text: $engine.query)
                 .textFieldStyle(.plain)
+                .font(.system(size: 18))
                 .focused($searchFocused)
                 .onKeyPress(.downArrow) { move(by: Self.columns); return .handled }
                 .onKeyPress(.upArrow) { move(by: -Self.columns); return .handled }
@@ -93,14 +100,16 @@ struct PickerView: View {
                 }
             if searching {
                 Button { engine.query = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.6)))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.55)))
     }
 
     // MARK: - Grid
@@ -203,15 +212,15 @@ struct PickerView: View {
                     .lineLimit(1)
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
             HStack(spacing: 2) {
                 ForEach(Category.allCases) { c in
                     categoryButton(c)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
         }
     }
 
@@ -287,4 +296,32 @@ private struct PanelChrome: ViewModifier {
                 .overlay(shape.strokeBorder(.quaternary))
         }
     }
+}
+
+/// A within-window blur whose mask fades out toward the grid — the "progressive blur"
+/// under the search bar and the tab bar. Built on NSVisualEffectView because SwiftUI's
+/// materials can't be gradient-masked on macOS.
+private struct ProgressiveBlur: NSViewRepresentable {
+    enum Edge { case top, bottom }
+    let edge: Edge
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.blendingMode = .withinWindow
+        v.material = .hudWindow
+        v.state = .active
+        // 1pt-wide gradient stretched over the view: solid at the bar's edge, clear at the grid.
+        let mask = NSImage(size: NSSize(width: 1, height: 64), flipped: false) { rect in
+            let solidEnd: [NSColor] = [.clear, .black.withAlphaComponent(0.85), .black]  // bottom → top
+            let colors = edge == .top ? solidEnd : solidEnd.reversed()
+            NSGradient(colors: colors, atLocations: [0, 0.45, 1], colorSpace: .deviceRGB)?
+                .draw(in: rect, angle: 90)
+            return true
+        }
+        mask.resizingMode = .stretch
+        v.maskImage = mask
+        return v
+    }
+
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }

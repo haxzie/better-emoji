@@ -58,11 +58,17 @@ final class PickerPanel: NSPanel {
         if isVisible { hide() }
     }
 
-    func show() {
+    /// Places the panel the way the system emoji picker does: just below the text caret
+    /// of the frontmost app, left edge lined up with it, flipping above when there's no
+    /// room. `anchor` overrides that (e.g. the menu bar button); with neither, the mouse.
+    func show(anchor explicit: NSRect? = nil) {
         let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
+        let anchor = explicit ?? FocusAnchor.current() ?? NSRect(x: mouse.x, y: mouse.y, width: 0, height: 0)
+        let screen = NSScreen.screens.first { $0.frame.contains(NSPoint(x: anchor.midX, y: anchor.midY)) } ?? NSScreen.main
         let bounds = screen?.visibleFrame ?? .zero
-        var origin = NSPoint(x: mouse.x - frame.width / 2, y: mouse.y - frame.height - 16)
+        let gap: CGFloat = 8
+        var origin = NSPoint(x: anchor.minX - 12, y: anchor.minY - gap - frame.height)
+        if origin.y < bounds.minY { origin.y = anchor.maxY + gap }
         origin.x = min(max(origin.x, bounds.minX + 8), bounds.maxX - frame.width - 8)
         origin.y = min(max(origin.y, bounds.minY + 8), bounds.maxY - frame.height - 8)
         setFrameOrigin(origin)
