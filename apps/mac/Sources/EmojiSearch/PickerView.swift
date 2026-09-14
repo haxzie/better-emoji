@@ -165,7 +165,7 @@ struct PickerView: View {
     private func cell(_ e: Emoji, position: Int) -> some View {
         let highlighted = selection == position || (selection == nil && hovered == e)
         return Text(e.char)
-            .font(.system(size: 36))
+            .font(.system(size: 32))
             .frame(width: Self.cellSize, height: Self.cellSize)
             .background(
                 RoundedRectangle(cornerRadius: 8)
