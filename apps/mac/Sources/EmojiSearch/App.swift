@@ -316,7 +316,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let app = NSMenu(title: "Better Emoji")
         app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         app.addItem(.separator())
-        app.addItem(withTitle: "Quit Better Emoji", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        // ⌘Q from the settings window just closes it — the hotkey keeps working. Actually
+        // quitting is the tray menu's job (and ⌘Q still quits if no window is open).
+        app.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        app.addItem(withTitle: "Quit Better Emoji", action: #selector(closeWindowOrQuit), keyEquivalent: "q")
 
         let main = NSMenu()
         for (title, submenu) in [("Better Emoji", app), ("Edit", edit)] {
@@ -446,6 +449,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func hideMenuBarIcon() {
         UserDefaults.standard.set(false, forKey: "showMenuBarIcon")
         NotificationCenter.default.post(name: .menuBarVisibilityChanged, object: nil)
+    }
+
+    @objc private func closeWindowOrQuit() {
+        if let win = SettingsWindowController.shared.window, win.isVisible {
+            win.performClose(nil)
+        } else {
+            NSApp.terminate(nil)
+        }
     }
 
     @objc private func openSettings() {
