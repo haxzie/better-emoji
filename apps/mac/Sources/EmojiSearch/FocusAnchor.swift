@@ -1,5 +1,8 @@
 import AppKit
 import ApplicationServices
+import os
+
+private let log = Logger(subsystem: "com.haxzie.better-emoji", category: "anchor")
 
 /// Where the user is typing, so the picker can drop in next to it like the system
 /// emoji picker does. Needs Accessibility access (already required for pasting).
@@ -8,26 +11,37 @@ enum FocusAnchor {
     /// frontmost app — or the focused control's frame when the app doesn't report caret
     /// bounds. `nil` when nothing useful is focused or we lack Accessibility access.
     static func current() -> NSRect? {
-        guard AXIsProcessTrusted() else { return nil }
+        guard AXIsProcessTrusted() else { log.info("not trusted"); return nil }
         var focusedRef: AnyObject?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(),
-                                            kAXFocusedUIElementAttribute as CFString,
-                                            &focusedRef) == .success,
-              let focusedRef else { return nil }
+        let focusErr = AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(),
+                                                     kAXFocusedUIElementAttribute as CFString,
+                                                     &focusedRef)
+        guard focusErr == .success, let focusedRef else { log.info("no focused element: \(focusErr.rawValue)"); return nil }
         let element = focusedRef as! AXUIElement
+        var roleRef: AnyObject?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
+        let role = (roleRef as? String) ?? "?"
+        var pid: pid_t = 0; AXUIElementGetPid(element, &pid)
+        let appName = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "?"
+        log.info("focused \(role, privacy: .public) in \(appName, privacy: .public)")
 
         // Preferred: bounds of the selected range (a zero-length range is the caret).
         var rangeRef: AnyObject?
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
            let rangeRef {
+            var range = CFRange(); AXValueGetValue(rangeRef as! AXValue, .cfRange, &range)
             var boundsRef: AnyObject?
-            if AXUIElementCopyParameterizedAttributeValue(element,
-                                                          kAXBoundsForRangeParameterizedAttribute as CFString,
-                                                          rangeRef, &boundsRef) == .success,
-               let boundsRef, let rect = rect(from: boundsRef as! AXValue, .cgRect),
-               rect.height > 0 {  // apps that don't support this return an empty rect
-                return flipped(rect)
+            let err = AXUIElementCopyParameterizedAttributeValue(element,
+                                                                 kAXBoundsForRangeParameterizedAttribute as CFString,
+                                                                 rangeRef, &boundsRef)
+            let bounds = boundsRef.flatMap { Self.rect(from: $0 as! AXValue, .cgRect) }
+            let desc = bounds.map { "\($0)" } ?? "nil"
+            log.info("range \(range.location),\(range.length) → bounds err=\(err.rawValue) rect=\(desc, privacy: .public)")
+            if err == .success, let bounds, bounds.height > 0 {  // apps that don't support this return an empty rect
+                return flipped(bounds)
             }
+        } else {
+            log.info("no selected text range")
         }
 
         // Fallback: the focused control's frame — useful for single-line fields whose
@@ -39,8 +53,9 @@ enum FocusAnchor {
               let posRef, let sizeRef else { return nil }
         var origin = CGPoint.zero, size = CGSize.zero
         guard AXValueGetValue(posRef as! AXValue, .cgPoint, &origin),
-              AXValueGetValue(sizeRef as! AXValue, .cgSize, &size),
-              size.height > 0, size.height <= 120 else { return nil }
+              AXValueGetValue(sizeRef as! AXValue, .cgSize, &size) else { return nil }
+        log.info("element frame \(origin.x),\(origin.y) \(size.width)x\(size.height)")
+        guard size.height > 0, size.height <= 120 else { return nil }
         return flipped(CGRect(origin: origin, size: size))
     }
 
