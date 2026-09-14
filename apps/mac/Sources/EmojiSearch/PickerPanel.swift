@@ -20,7 +20,7 @@ final class PickerPanel: NSPanel {
         hasShadow = true
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
-        animationBehavior = .utilityWindow
+        animationBehavior = .none  // we animate ourselves, scaling from the caret
         contentView = view
         // Liquid Glass draws its rim along the window's backdrop, which for a borderless
         // window is a hard rectangle. Round the content layer so the backdrop matches the
@@ -79,10 +79,54 @@ final class PickerPanel: NSPanel {
         origin.x = min(max(origin.x, bounds.minX + 8), bounds.maxX - frame.width - 8)
         origin.y = min(max(origin.y, bounds.minY + 8), bounds.maxY - frame.height - 8)
         setFrameOrigin(origin)
+
+        // Scale about the point the panel "grows" from: the caret's x on the edge that
+        // faces it — top edge when we're below the caret, bottom edge when above.
+        let below = origin.y + frame.height <= anchor.minY + 1
+        popOrigin = CGPoint(x: min(max(anchor.midX - origin.x, 0), frame.width),
+                            y: below ? frame.height : 0)
+
+        hiding = false
+        alphaValue = 0
+        contentView?.layer?.transform = scaleTransform(0.8)
         makeKeyAndOrderFront(nil)
+        animate(scale: 1, alpha: 1, duration: 0.24,
+                timing: CAMediaTimingFunction(controlPoints: 0.2, 1.15, 0.3, 1))  // slight overshoot
         // SwiftUI's @FocusState doesn't reliably take in a borderless non-activating
         // panel, so hand the text field first-responder status directly.
         DispatchQueue.main.async { [weak self] in self?.focusSearchField() }
+    }
+
+    // MARK: - Pop animation
+
+    private var popOrigin = CGPoint.zero
+    private var hiding = false
+
+    private func scaleTransform(_ s: CGFloat) -> CATransform3D {
+        // Scale about popOrigin with the layer's default (0,0) anchor: move the point to
+        // the origin, scale, move it back.
+        let toOrigin = CATransform3DMakeTranslation(-popOrigin.x, -popOrigin.y, 0)
+        let back     = CATransform3DMakeTranslation(popOrigin.x, popOrigin.y, 0)
+        return CATransform3DConcat(CATransform3DConcat(toOrigin, CATransform3DMakeScale(s, s, 1)), back)
+    }
+
+    private func animate(scale: CGFloat, alpha: CGFloat, duration: TimeInterval,
+                         timing: CAMediaTimingFunction, completion: (() -> Void)? = nil) {
+        guard let layer = contentView?.layer else { completion?(); return }
+        let target = scaleTransform(scale)
+        let anim = CABasicAnimation(keyPath: "transform")
+        anim.fromValue = layer.presentation()?.transform ?? layer.transform
+        anim.toValue = target
+        anim.duration = duration
+        anim.timingFunction = timing
+        layer.transform = target
+        layer.add(anim, forKey: "pop")
+
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = duration
+            ctx.timingFunction = timing
+            self.animator().alphaValue = alpha
+        }, completionHandler: completion)
     }
 
     private func focusSearchField() {
@@ -95,7 +139,16 @@ final class PickerPanel: NSPanel {
     }
 
     func hide() {
-        orderOut(nil)
-        onHide?()
+        guard !hiding else { return }
+        hiding = true
+        animate(scale: 0.85, alpha: 0, duration: 0.14,
+                timing: CAMediaTimingFunction(name: .easeIn)) { [weak self] in
+            guard let self, self.hiding else { return }
+            self.orderOut(nil)
+            self.contentView?.layer?.transform = CATransform3DIdentity
+            self.alphaValue = 1
+            self.hiding = false
+            self.onHide?()
+        }
     }
 }
