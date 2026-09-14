@@ -134,13 +134,14 @@ jobs:
             exit 1
           fi
 
-      - name: Upload the zip
+      - name: Upload the zip and DMG
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           VERSION: ${{ steps.release.outputs.version }}
           FILE: ${{ steps.release.outputs.file }}
+          DMG: ${{ steps.release.outputs.dmg }}
         run: |
           set -eu
           # Version-pinned key, so the object never changes and the Worker can
