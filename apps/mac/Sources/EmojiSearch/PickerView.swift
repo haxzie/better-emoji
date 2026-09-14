@@ -61,11 +61,11 @@ struct PickerView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
                     .padding(.bottom, 8)
-                    .background(ProgressiveBlur(edge: .top).padding(.bottom, -28))
+                    .background(ProgressiveBlur(edge: .top).padding(.bottom, -28).allowsHitTesting(false))
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 footer
-                    .background(ProgressiveBlur(edge: .bottom).padding(.top, -28))
+                    .background(ProgressiveBlur(edge: .bottom).padding(.top, -28).allowsHitTesting(false))
             }
         .frame(width: Self.width, height: Self.height)
         .modifier(PanelChrome())
@@ -306,8 +306,13 @@ private struct ProgressiveBlur: NSViewRepresentable {
     enum Edge { case top, bottom }
     let edge: Edge
 
+    /// The blur overhangs the grid; it must never eat clicks meant for the emoji under it.
+    final class PassthroughEffectView: NSVisualEffectView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
+        let v = PassthroughEffectView()
         v.blendingMode = .withinWindow
         v.material = .hudWindow
         v.state = .active
