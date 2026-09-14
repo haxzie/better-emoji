@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import ServiceManagement
 import SwiftUI
 
 @main
@@ -67,6 +68,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if UserDefaults.standard.object(forKey: "showMenuBarIcon") == nil {
             UserDefaults.standard.set(true, forKey: "showMenuBarIcon")
+        }
+        // First launch: register as a login item. Only ever done once, so turning it
+        // off in Settings sticks.
+        if !UserDefaults.standard.bool(forKey: "didDefaultLaunchAtLogin") {
+            UserDefaults.standard.set(true, forKey: "didDefaultLaunchAtLogin")
+            if SMAppService.mainApp.status != .enabled {
+                try? SMAppService.mainApp.register()
+            }
         }
         if UserDefaults.standard.bool(forKey: "showMenuBarIcon") { setUpStatusItem() }
 
@@ -332,10 +341,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
+        let hide = NSMenuItem(title: "Hide Menu Bar Icon", action: #selector(hideMenuBarIcon), keyEquivalent: "")
+        hide.target = self
+        menu.addItem(hide)
+        let hideHint = NSMenuItem(title: "     Open the app from Finder to get it back", action: nil, keyEquivalent: "")
+        hideHint.isEnabled = false
+        menu.addItem(hideHint)
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
         statusItem?.menu = nil  // back to click-to-toggle
+    }
+
+    @objc private func hideMenuBarIcon() {
+        UserDefaults.standard.set(false, forKey: "showMenuBarIcon")
+        NotificationCenter.default.post(name: .menuBarVisibilityChanged, object: nil)
     }
 
     @objc private func openSettings() {
