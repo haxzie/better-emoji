@@ -1,6 +1,7 @@
 import AppKit
 import CryptoKit
 import Foundation
+import os
 
 // MARK: - Manifest
 
@@ -31,7 +32,18 @@ final class UpdateChecker: NSObject, ObservableObject {
         case failed(String)
     }
 
-    @Published var state: State = .idle
+    /// One checker for the whole app: the background poll, the tray badge and the
+    /// Settings pane all watch the same state.
+    static let shared = UpdateChecker()
+
+    @Published var state: State = .idle {
+        didSet { Logger(subsystem: "com.haxzie.better-emoji", category: "updates").info("state → \(String(describing: self.state), privacy: .public)") }
+    }
+
+    var availableVersion: String? {
+        if case .available(let v, _, _, _, _) = state { return v }
+        return nil
+    }
 
     private let currentVersion: String
     private let manifestURL = URL(string: "https://emoji.haxzie.com/releases/latest.json")!
@@ -46,7 +58,8 @@ final class UpdateChecker: NSObject, ObservableObject {
 
     // MARK: - Public
 
-    func check() {
+    func check(caller: String = #function) {
+        Logger(subsystem: "com.haxzie.better-emoji", category: "updates").info("check() from \(caller, privacy: .public)")
         state = .checking
         Task {
             do {
@@ -93,6 +106,15 @@ final class UpdateChecker: NSObject, ObservableObject {
     }
 
     func retry() { state = .idle }
+
+    /// Background poll: same as `check()` but never interrupts a download or install,
+    /// and doesn't flash "checking…" over an already-known result.
+    func checkInBackground() {
+        switch state {
+        case .idle, .upToDate, .failed: check(caller: "background")
+        case .available, .checking, .downloading, .installing: break  // nothing to add, and no badge flicker
+        }
+    }
 
     // MARK: - Download with progress
 

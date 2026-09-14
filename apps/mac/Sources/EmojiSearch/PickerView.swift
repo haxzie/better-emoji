@@ -19,10 +19,16 @@ struct PickerView: View {
     @EnvironmentObject private var engine: SearchEngine
     @EnvironmentObject private var panel: PanelState
     @FocusState private var searchFocused: Bool
-    @State private var hovered: Emoji?
     @State private var category: Category = .smileys
+    /// Always points at something (the first emoji by default) so ⏎ inserts it.
+    /// Hover moves it; ↑↓ move it and start keyboard navigation.
     @State private var selection: Int?
+    /// True once ↑/↓ has been pressed: ←/→ then move the selection instead of the text
+    /// cursor, and selection changes scroll the grid.
+    @State private var navigating = false
     @State private var recent: [Emoji] = []
+    /// Cell showing the "picked" check while the panel lingers before closing.
+    @State private var picked: Int?
 
     private struct Section: Identifiable {
         let category: Category
@@ -72,11 +78,12 @@ struct PickerView: View {
         .onAppear { recent = engine.store.recent }
         .onChange(of: panel.shownCount) { _, _ in
             recent = engine.store.recent
-            selection = nil
-            hovered = nil
+            selection = 0
+            navigating = false
             searchFocused = true
         }
-        .onChange(of: engine.query) { _, _ in selection = nil }
+        .onChange(of: engine.query) { _, _ in selection = 0; navigating = false }
+        .onChange(of: engine.results.count) { _, _ in if !navigating { selection = 0 } }
     }
 
     // MARK: - Search bar
@@ -90,10 +97,10 @@ struct PickerView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .focused($searchFocused)
-                .onKeyPress(.downArrow) { move(by: Self.columns); return .handled }
-                .onKeyPress(.upArrow) { move(by: -Self.columns); return .handled }
-                .onKeyPress(.leftArrow) { selection == nil ? .ignored : moveHandled(by: -1) }
-                .onKeyPress(.rightArrow) { selection == nil ? .ignored : moveHandled(by: 1) }
+                .onKeyPress(.downArrow) { navigating = true; move(by: Self.columns); return .handled }
+                .onKeyPress(.upArrow) { navigating = true; move(by: -Self.columns); return .handled }
+                .onKeyPress(.leftArrow) { navigating ? moveHandled(by: -1) : .ignored }
+                .onKeyPress(.rightArrow) { navigating ? moveHandled(by: 1) : .ignored }
                 .onKeyPress(.return) { pickSelected(); return .handled }
                 .onKeyPress(.escape) {
                     if searching { engine.query = "" } else { panel.onDismiss() }
@@ -146,7 +153,7 @@ struct PickerView: View {
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(c, anchor: .top) }
             }
             .onChange(of: selection) { _, s in
-                if let s { proxy.scrollTo(s) }
+                if navigating, let s { proxy.scrollTo(s) }
             }
         }
     }
@@ -163,26 +170,28 @@ struct PickerView: View {
     }
 
     private func cell(_ e: Emoji, position: Int) -> some View {
-        let highlighted = selection == position || (selection == nil && hovered == e)
+        let highlighted = selection == position
         return Text(e.char)
             .font(.system(size: 32))
             .frame(width: Self.cellSize, height: Self.cellSize)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.primary.opacity(highlighted ? 0.14 : 0))
+                // Same fill as the search field so the two read as one system.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.quaternary.opacity(highlighted ? 0.55 : 0))
             )
             .contentShape(Rectangle())
             .onHover { inside in
-                if inside { hovered = e } else if hovered == e { hovered = nil }
+                if inside { selection = position }
             }
-            .onTapGesture { pick(e, e.char) }
+            .overlay { if picked == position { PickedBadge() } }
+            .onTapGesture { pick(e, e.char, at: position) }
             .contextMenu {
                 if !e.skins.isEmpty {
                     ForEach([e.char] + e.skins, id: \.self) { variant in
-                        Button(variant) { pick(e, variant) }
+                        Button(variant) { pick(e, variant, at: position) }
                     }
                 } else {
-                    Button("Copy \(e.char)") { pick(e, e.char) }
+                    Button("Copy \(e.char)") { pick(e, e.char, at: position) }
                 }
             }
             .id(position)
@@ -207,7 +216,7 @@ struct PickerView: View {
     private var footer: some View {
         VStack(spacing: 4) {
             HStack {
-                Text(hovered.map { $0.name.capitalized } ?? statusText)
+                Text(selectedEmoji.map { $0.name.capitalized } ?? statusText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -267,15 +276,26 @@ struct PickerView: View {
         return .handled
     }
 
-    private func pickSelected() {
+    private var selectedEmoji: Emoji? {
         let list = visible
-        guard let e = selection.flatMap({ list.indices.contains($0) ? list[$0] : nil }) ?? (searching ? list.first : nil) else { return }
-        pick(e, e.char)
+        guard let s = selection, list.indices.contains(s) else { return nil }
+        return list[s]
     }
 
-    private func pick(_ e: Emoji, _ char: String) {
+    private func pickSelected() {
+        guard let e = selectedEmoji ?? visible.first else { return }
+        pick(e, e.char, at: selectedEmoji == nil ? 0 : selection ?? 0)
+    }
+
+    /// Flash the check on the cell, then hand off (which closes the panel and inserts).
+    private func pick(_ e: Emoji, _ char: String, at position: Int) {
+        guard picked == nil else { return }  // already on the way out
         engine.store.touchRecent(e)
-        panel.onPick(e, char)
+        picked = position
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            panel.onPick(e, char)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { picked = nil }
+        }
     }
 }
 
@@ -330,4 +350,28 @@ private struct ProgressiveBlur: NSViewRepresentable {
     }
 
     func updateNSView(_ v: NSVisualEffectView, context: Context) {}
+}
+
+/// Green check in a translucent ring, springing up over the emoji that was just picked.
+private struct PickedBadge: View {
+    @State private var shown = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.black.opacity(0.35))
+            Circle()
+                .strokeBorder(.white.opacity(0.55), lineWidth: 2)
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .green)
+        }
+        .frame(width: 44, height: 44)
+        .scaleEffect(shown ? 1 : 0.4)
+        .opacity(shown ? 1 : 0)
+        .onAppear {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.55)) { shown = true }
+        }
+    }
 }

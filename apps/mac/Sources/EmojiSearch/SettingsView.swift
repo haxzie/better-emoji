@@ -57,7 +57,7 @@ struct SettingsView: View {
     @State private var launchAtLogin        = SMAppService.mainApp.status == .enabled
     @State private var accessibilityGranted = AXIsProcessTrusted()
     @State private var isRecordingShortcut  = false
-    @StateObject private var updater        = UpdateChecker()
+    @ObservedObject private var updater     = UpdateChecker.shared
 
     private let version   = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
     private let githubURL = URL(string: "https://github.com/haxzie/better-emoji")!

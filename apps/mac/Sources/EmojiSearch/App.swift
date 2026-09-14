@@ -1,11 +1,14 @@
 import AppKit
 import Carbon
+import Combine
 import ServiceManagement
 import SwiftUI
+import os
+@preconcurrency import UserNotifications
 
 @main
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     static func main() {
         // `EmojiSearch --probe "ship it" "feeling great"` prints top hits and exits;
         // handy for checking the Swift pipeline against packages/emoji-index/scripts/probe.mjs.
@@ -35,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: HotKey?
     private var engine: SearchEngine!
     private let panelState = PanelState()
+    private var updateSub: AnyCancellable?
+    private var updateTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -80,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if UserDefaults.standard.bool(forKey: "showMenuBarIcon") { setUpStatusItem() }
 
         registerHotKey()
+        setUpUpdateChecks()
 
         // Re-register the hotkey and toggle the status bar icon when settings change.
         NotificationCenter.default.addObserver(self, selector: #selector(applyShortcutChange),
@@ -87,16 +93,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(applyMenuBarChange),
                                                name: .menuBarVisibilityChanged, object: nil)
 
+        let args = CommandLine.arguments
+        let isCLI = args.contains("--show") || args.contains("--snapshot")
+
         // On first launch (or whenever Accessibility isn't granted yet), prompt the user so
         // emoji insertion works like the system picker — no separate "Enable" step required.
-        if !AXIsProcessTrusted() {
+        // Not in the harness: the system dialog takes key from the panel and hides it.
+        if !AXIsProcessTrusted() && !isCLI {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 Inserter.requestAccessibility()
             }
         }
-
-        let args = CommandLine.arguments
-        let isCLI = args.contains("--show") || args.contains("--snapshot")
         if !isCLI {
             // Launched from Finder / dock: show the settings window.
             SettingsWindowController.shared.show()
@@ -152,7 +159,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let f = panel.frame
         let primaryH = NSScreen.screens.first?.frame.height ?? 0
         let quartz = CGRect(x: f.minX - pad, y: primaryH - f.maxY - pad, width: f.width + 2 * pad, height: f.height + 2 * pad)
-        guard let cg = CGWindowListCreateImage(quartz, .optionIncludingWindow, CGWindowID(panel.windowNumber), [.bestResolution]) else { return }
+        guard let cg = CGWindowListCreateImage(quartz, .optionIncludingWindow, CGWindowID(panel.windowNumber), [.bestResolution]) else {
+            FileHandle.standardError.write("snapshot: no image (visible=\(panel.isVisible) alpha=\(panel.alphaValue) frame=\(f) win=\(panel.windowNumber))\n".data(using: .utf8)!)
+            return
+        }
         let rep = NSBitmapImageRep(cgImage: cg)
         if let png = rep.representation(using: .png, properties: [:]) {
             try? png.write(to: URL(fileURLWithPath: path))
@@ -182,6 +192,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         SettingsWindowController.shared.show()
         return true
+    }
+
+    // MARK: - Updates
+
+    /// Checks shortly after launch and every 6 h. A new version badges the tray icon,
+    /// adds an "Update to vX" item to its menu, and posts one notification per version.
+    private func setUpUpdateChecks() {
+        let checker = UpdateChecker.shared
+        // Map the emitted value: @Published fires on willSet, so reading the checker's
+        // property here would see the previous state.
+        updateSub = checker.$state
+            .map { state -> String? in
+                if case .available(let v, _, _, _, _) = state { return v }
+                return nil
+            }
+            .removeDuplicates()
+            .sink { [weak self] version in self?.updateAvailabilityChanged(version) }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { checker.checkInBackground() }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { _ in
+            Task { @MainActor in checker.checkInBackground() }
+        }
+
+        // Only a real .app can talk to the notification center; the bare binary the
+        // snapshot harness runs would crash on UNUserNotificationCenter.current().
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            UNUserNotificationCenter.current().delegate = self
+        }
+    }
+
+    private func updateAvailabilityChanged(_ version: String?) {
+        Logger(subsystem: "com.haxzie.better-emoji", category: "updates").info("available: \(version ?? "none", privacy: .public)")
+        refreshStatusItemBadge()
+        guard let version else { return }
+        let key = "notifiedUpdateVersion"
+        guard UserDefaults.standard.string(forKey: key) != version,
+              Bundle.main.bundleURL.pathExtension == "app" else { return }
+
+        // Provisional: delivered quietly to Notification Center with no permission
+        // dialog. The tray badge and menu item are the primary cue; this is a record.
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .provisional]) { granted, error in
+            Logger(subsystem: "com.haxzie.better-emoji", category: "updates").info("notification auth granted=\(granted) \(error.map { "\($0)" } ?? "", privacy: .public)")
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Better Emoji \(version) is available"
+            content.body = "Click to install the update."
+            center.add(UNNotificationRequest(identifier: "update-\(version)", content: content, trigger: nil)) { err in
+                Logger(subsystem: "com.haxzie.better-emoji", category: "updates").info("notification posted: \(err.map { "\($0)" } ?? "ok", privacy: .public)")
+                // Only remember it once it's actually been shown, so a denied or failed
+                // attempt doesn't silence this version forever.
+                if err == nil { UserDefaults.standard.set(version, forKey: key) }
+            }
+        }
+    }
+
+    /// Orange dot next to the tray icon while an update is waiting.
+    private func refreshStatusItemBadge() {
+        guard let button = statusItem?.button else { return }
+        if let v = UpdateChecker.shared.availableVersion {
+            button.attributedTitle = NSAttributedString(string: " ●", attributes: [
+                .foregroundColor: NSColor.systemOrange,
+                .font: NSFont.systemFont(ofSize: 7),
+                .baselineOffset: 5,
+            ])
+            button.toolTip = "Better Emoji — update to \(v) available"
+        } else {
+            button.title = ""
+            button.toolTip = "Better Emoji  \(shortcutDisplayString())"
+        }
     }
 
     // MARK: - Hotkey
@@ -279,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             button.title = ""
             button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Better Emoji")
-            button.toolTip = "Better Emoji  \(self?.shortcutDisplayString() ?? "")"
+            self?.refreshStatusItemBadge()
             // Nudge the user to grant Accessibility once, so future picks auto-paste.
             if !AXIsProcessTrusted() { self?.nudgeAccessibility() }
         }
@@ -312,6 +392,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
+
+        if let v = UpdateChecker.shared.availableVersion {
+            let update = NSMenuItem(title: "Update to \(v)…", action: #selector(openSettings), keyEquivalent: "")
+            update.target = self
+            update.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            menu.addItem(update)
+            menu.addItem(.separator())
+        }
 
         // Open item — shows the keyboard shortcut in the menu
         let open = NSMenuItem(title: "Open Better Emoji", action: #selector(toggle), keyEquivalent: " ")
@@ -366,6 +454,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func requestAccessibility() {
         Inserter.requestAccessibility()
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+        Task { @MainActor in
+            SettingsWindowController.shared.show()
+            completionHandler()
+        }
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner])  // show even while we're the active app
     }
 
     // MARK: - Panel
