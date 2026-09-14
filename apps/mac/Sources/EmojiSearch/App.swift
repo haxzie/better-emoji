@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         app.run()
     }
 
-    private var statusItem: NSStatusItem!
+    private var statusItem: NSStatusItem?
     private var panel: PickerPanel!
     private var hotKey: HotKey?
     private var engine: SearchEngine!
@@ -42,23 +42,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = PickerView()
             .environmentObject(engine)
             .environmentObject(panelState)
+            .preferredColorScheme(.light)  // always light — matches the web app
         let hosting = NSHostingView(rootView: root)
         hosting.frame = NSRect(x: 0, y: 0, width: PickerView.width, height: PickerView.height)
+        hosting.appearance = NSAppearance(named: .aqua)  // force light on the hosting view itself
         panel = PickerPanel(contentView: hosting)
         panel.onHide = { [weak self] in self?.engine.query = "" }
 
         panelState.onPick = { [weak self] _, char in
             self?.panel.hide()
-            Inserter.insert(char)
+            let pasted = Inserter.insert(char)
+            if !pasted { self?.showCopiedFeedback(char) }
         }
         panelState.onDismiss = { [weak self] in self?.panel.hide() }
 
-        setUpStatusItem()
-        // ⌃⌥Space — the system picker owns ⌃⌘Space and 🌐, so sit next to it.
-        hotKey = HotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey)) { [weak self] in
-            self?.toggle()
+        if UserDefaults.standard.object(forKey: "showMenuBarIcon") == nil {
+            UserDefaults.standard.set(true, forKey: "showMenuBarIcon")
         }
+        if UserDefaults.standard.bool(forKey: "showMenuBarIcon") { setUpStatusItem() }
+
+        registerHotKey()
+
+        // Re-register the hotkey and toggle the status bar icon when settings change.
+        NotificationCenter.default.addObserver(self, selector: #selector(applyShortcutChange),
+                                               name: .shortcutChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applyMenuBarChange),
+                                               name: .menuBarVisibilityChanged, object: nil)
+
+        // On first launch (or whenever Accessibility isn't granted yet), prompt the user so
+        // emoji insertion works like the system picker — no separate "Enable" step required.
+        if !AXIsProcessTrusted() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                Inserter.requestAccessibility()
+            }
+        }
+
         let args = CommandLine.arguments
+        let isCLI = args.contains("--show") || args.contains("--snapshot")
+        if !isCLI {
+            // Launched from Finder / dock: show the settings window.
+            SettingsWindowController.shared.show()
+        }
         if args.contains("--show") { toggle() }
         // `--snapshot out.png [query]`: show, wait for the model, optionally search,
         // render the panel to a PNG and quit. Lets us eyeball the UI headlessly.
@@ -116,15 +140,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // Re-open settings when the user double-clicks the app icon while running.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        SettingsWindowController.shared.show()
+        return true
+    }
+
+    // MARK: - Hotkey
+
+    private func registerHotKey() {
+        hotKey = nil  // unregisters the old one via deinit
+        let ud = UserDefaults.standard
+        let kc  = ud.object(forKey: "shortcutKeyCode") == nil ? kVK_Space : ud.integer(forKey: "shortcutKeyCode")
+        let useCtrl  = ud.object(forKey: "shortcutCtrl")  == nil ? true  : ud.bool(forKey: "shortcutCtrl")
+        let useOpt   = ud.object(forKey: "shortcutOpt")   == nil ? true  : ud.bool(forKey: "shortcutOpt")
+        let useShift = ud.bool(forKey: "shortcutShift")
+        let useCmd   = ud.bool(forKey: "shortcutCmd")
+        var mods: UInt32 = 0
+        if useCtrl  { mods |= UInt32(controlKey) }
+        if useOpt   { mods |= UInt32(optionKey)  }
+        if useShift { mods |= UInt32(shiftKey)   }
+        if useCmd   { mods |= UInt32(cmdKey)     }
+        hotKey = HotKey(keyCode: UInt32(kc), modifiers: mods) { [weak self] in self?.toggle() }
+        // Update the status bar tooltip to reflect the new shortcut.
+        statusItem?.button?.toolTip = "Emoji Search  \(shortcutDisplayString())"
+    }
+
+    @objc private func applyShortcutChange() { registerHotKey() }
+
+    private func shortcutDisplayString() -> String {
+        let ud = UserDefaults.standard
+        var s = ""
+        if ud.object(forKey: "shortcutCtrl") == nil ? true  : ud.bool(forKey: "shortcutCtrl")  { s += "⌃" }
+        if ud.object(forKey: "shortcutOpt")  == nil ? true  : ud.bool(forKey: "shortcutOpt")   { s += "⌥" }
+        if ud.bool(forKey: "shortcutShift") { s += "⇧" }
+        if ud.bool(forKey: "shortcutCmd")   { s += "⌘" }
+        let kc = ud.object(forKey: "shortcutKeyCode") == nil ? kVK_Space : ud.integer(forKey: "shortcutKeyCode")
+        s += kc == kVK_Space ? "Space" : "Key"
+        return s
+    }
+
     // MARK: - Status item
+
+    @objc private func applyMenuBarChange() {
+        let show = UserDefaults.standard.bool(forKey: "showMenuBarIcon")
+        if show && statusItem == nil {
+            setUpStatusItem()
+        } else if !show, let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
 
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem?.button else { return }
         button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Emoji Search")
+        button.toolTip = "Emoji Search  \(shortcutDisplayString())"
         button.target = self
         button.action = #selector(statusItemClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    /// Briefly changes the menu-bar icon to show the emoji was copied to the clipboard.
+    private func showCopiedFeedback(_ char: String) {
+        guard let button = statusItem?.button else { return }
+        // Show the emoji itself in the status bar for 1.5 s so the user knows what was copied.
+        button.image = nil
+        button.title = char
+        button.toolTip = "\(char) copied — press ⌘V to paste"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            button.title = ""
+            button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Emoji Search")
+            button.toolTip = "Emoji Search  ⌃⌥Space"
+            // Nudge the user to grant Accessibility once, so future picks auto-paste.
+            if !AXIsProcessTrusted() { self?.nudgeAccessibility() }
+        }
+    }
+
+    /// One-time nudge via a non-blocking alert.
+    private var hasNudgedAccessibility = false
+    private func nudgeAccessibility() {
+        guard !hasNudgedAccessibility else { return }
+        hasNudgedAccessibility = true
+        let alert = NSAlert()
+        alert.messageText = "Enable auto-paste"
+        alert.informativeText = "Grant Accessibility access so Emoji Search can type emoji directly into any app — just like the system picker."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            Inserter.requestAccessibility()
+        }
     }
 
     @objc private func statusItemClicked() {
@@ -137,23 +243,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
+
+        // Open item — shows the keyboard shortcut in the menu
         let open = NSMenuItem(title: "Open Emoji Search", action: #selector(toggle), keyEquivalent: " ")
         open.keyEquivalentModifierMask = [.control, .option]
         open.target = self
         menu.addItem(open)
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.keyEquivalentModifierMask = .command
+        settings.target = self
+        menu.addItem(settings)
+
         menu.addItem(.separator())
-        let paste = NSMenuItem(
-            title: Inserter.canPaste ? "Pastes into the active app ✓" : "Enable Paste into Active App…",
-            action: Inserter.canPaste ? nil : #selector(requestAccessibility),
-            keyEquivalent: ""
-        )
-        paste.target = self
-        menu.addItem(paste)
+
+        // Accessibility / paste status
+        if Inserter.canPaste {
+            let ok = NSMenuItem(title: "✓ Typing into active app", action: nil, keyEquivalent: "")
+            ok.isEnabled = false
+            menu.addItem(ok)
+        } else {
+            let enable = NSMenuItem(title: "Enable Auto-Paste (Accessibility)…", action: #selector(requestAccessibility), keyEquivalent: "")
+            enable.target = self
+            menu.addItem(enable)
+            let hint = NSMenuItem(title: "     Without it, emoji are copied to clipboard", action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            menu.addItem(hint)
+        }
+
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Emoji Search", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil  // back to click-to-toggle
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil  // back to click-to-toggle
+    }
+
+    @objc private func openSettings() {
+        SettingsWindowController.shared.show()
     }
 
     @objc private func requestAccessibility() {

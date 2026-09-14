@@ -6,17 +6,21 @@ import ApplicationServices
 enum Inserter {
     static var canPaste: Bool { AXIsProcessTrusted() }
 
-    static func insert(_ text: String) {
+    /// Puts the emoji into the active app.
+    /// - Returns: `true` if it pasted via Cmd+V (Accessibility granted), `false` if clipboard-only.
+    @discardableResult
+    static func insert(_ text: String) -> Bool {
         let pb = NSPasteboard.general
         let saved = snapshot(pb)
         pb.clearContents()
         pb.setString(text, forType: .string)
-        guard canPaste else { return }
+        guard canPaste else { return false }
         // Give the panel a beat to close so the keystroke lands in the previous app.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             postCommandV()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { restore(pb, saved) }
         }
+        return true
     }
 
     static func requestAccessibility() {

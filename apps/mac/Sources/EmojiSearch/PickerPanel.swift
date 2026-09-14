@@ -22,10 +22,26 @@ final class PickerPanel: NSPanel {
         hidesOnDeactivate = false
         animationBehavior = .utilityWindow
         contentView = view
+        // Always light — matches the web app aesthetic.
+        appearance = NSAppearance(named: .aqua)
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// Emacs-style ctrl+letter bindings (ctrl+a = beginning, ctrl+e = end, ctrl+k = kill, …)
+    /// don't reach the field editor in a non-activating panel because AppKit's text system
+    /// skips `interpretKeyEvents` when the hosting app isn't "active". Re-deliver them
+    /// directly onto the first responder so the standard key-binding machinery handles them.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown,
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control,
+           let fr = firstResponder, fr !== self {
+            fr.tryToPerform(#selector(NSResponder.keyDown(with:)), with: event)
+            return
+        }
+        super.sendEvent(event)
+    }
 
     /// Clicking anywhere else dismisses the picker.
     override func resignKey() {

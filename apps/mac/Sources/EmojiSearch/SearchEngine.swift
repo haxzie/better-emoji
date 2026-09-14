@@ -24,8 +24,10 @@ final class SearchEngine: ObservableObject {
     private let resultLimit = 64
     private let semanticCandidates = 200
     private let debounce: Duration = .milliseconds(80)
-    private let keywordWeight: Float = 0.5
-    private let semanticFloor: Float = 0.3
+    private let keywordWeight: Float = 0.5     // final = semantic + keywordWeight * keyword
+    private let semanticFloor: Float = 0.35    // absolute floor — matches web SEMANTIC_FLOOR
+    private let semanticRelative: Float = 0.55 // drop hits < this fraction of best — matches web SEMANTIC_RELATIVE
+    private let semanticMinKeep = 12           // always keep top-N semantic — matches web SEMANTIC_MIN_KEEP
 
     private var keywordHits: [(Int, Float)] = []
     private var debounceTask: Task<Void, Never>?
@@ -103,12 +105,23 @@ final class SearchEngine: ObservableObject {
         results = merge(keywordHits, semantic: hits)
     }
 
+    /// Mirrors apps/web/src/main.ts `merge()` exactly:
+    ///   cutoff = max(semanticFloor, bestSemanticScore × semanticRelative)
+    ///   keep a semantic-only hit if rank < semanticMinKeep OR score ≥ cutoff
+    ///   final score = s + keywordWeight × k
     private func merge(_ kw: [(Int, Float)], semantic sem: [(Int, Float)]?) -> [Emoji] {
         var scores: [Int: (k: Float, s: Float)] = [:]
         for (i, k) in kw { scores[i] = (k, 0) }
-        if let sem {
-            for (i, s) in sem {
-                if scores[i] != nil { scores[i]!.s = s } else if s >= semanticFloor { scores[i] = (0, s) }
+        if let sem, !sem.isEmpty {
+            let best = sem[0].1
+            let cutoff = max(semanticFloor, best * semanticRelative)
+            for (rank, (i, s)) in sem.enumerated() {
+                if var entry = scores[i] {
+                    entry.s = s
+                    scores[i] = entry
+                } else if rank < semanticMinKeep || s >= cutoff {
+                    scores[i] = (0, s)
+                }
             }
         }
         return scores
