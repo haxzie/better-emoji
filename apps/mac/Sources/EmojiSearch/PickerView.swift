@@ -169,7 +169,7 @@ struct PickerView: View {
             .frame(width: Self.cellSize, height: Self.cellSize)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(highlighted ? Color.accentColor.opacity(0.22) : .clear)
+                    .fill(.primary.opacity(highlighted ? 0.14 : 0))
             )
             .contentShape(Rectangle())
             .onHover { inside in
