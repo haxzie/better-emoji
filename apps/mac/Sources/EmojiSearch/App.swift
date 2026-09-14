@@ -42,11 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = PickerView()
             .environmentObject(engine)
             .environmentObject(panelState)
-            .preferredColorScheme(.light)  // always light — matches the web app
         let hosting = NSHostingView(rootView: root)
         hosting.frame = NSRect(x: 0, y: 0, width: PickerView.width, height: PickerView.height)
-        hosting.appearance = NSAppearance(named: .aqua)  // force light on the hosting view itself
         panel = PickerPanel(contentView: hosting)
+        setUpMainMenu()
         panel.onHide = { [weak self] in self?.engine.query = "" }
 
         panelState.onPick = { [weak self] _, char in
@@ -92,7 +91,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             toggle()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
                 // Type it through the responder chain so focus handling is exercised too.
-                for ch in query { typeKey(String(ch)) }
+                // "^x" sends ⌃x and "%x" sends ⌘x, e.g. "fire^ax" = type fire, ⌃A, type x.
+                var pendingModifier: NSEvent.ModifierFlags = []
+                for ch in query {
+                    switch ch {
+                    case "^": pendingModifier = .control
+                    case "%": pendingModifier = .command
+                    default:
+                        typeKey(String(ch), modifiers: pendingModifier)
+                        pendingModifier = []
+                    }
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in
                     snapshot(to: path)
                     NSApp.terminate(nil)
@@ -101,11 +110,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func typeKey(_ chars: String) {
+    private func typeKey(_ chars: String, modifiers: NSEvent.ModifierFlags = []) {
+        // Real ⌃/⌘ key events carry the control character in `characters`.
+        let characters = modifiers.contains(.control)
+            ? String(chars.unicodeScalars.compactMap { Unicode.Scalar($0.value & 0x1F) }.map(Character.init))
+            : chars
         for down in [true, false] {
             guard let ev = NSEvent.keyEvent(
-                with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: panel.windowNumber, context: nil, characters: chars,
+                with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: modifiers, timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: characters,
                 charactersIgnoringModifiers: chars, isARepeat: false, keyCode: 0
             ) else { continue }
             panel.sendEvent(ev)
@@ -178,6 +191,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let kc = ud.object(forKey: "shortcutKeyCode") == nil ? kVK_Space : ud.integer(forKey: "shortcutKeyCode")
         s += kc == kVK_Space ? "Space" : "Key"
         return s
+    }
+
+    // MARK: - Main menu
+
+    /// A menu-bar-less (LSUIElement) app has no Edit menu, so ⌘A/⌘C/⌘V/⌘X/⌘Z have no key
+    /// equivalents and silently do nothing in text fields. The menu is never shown; it
+    /// exists purely so AppKit routes those shortcuts to the first responder.
+    private func setUpMainMenu() {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let app = NSMenu(title: "Emoji Search")
+        app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        app.addItem(.separator())
+        app.addItem(withTitle: "Quit Emoji Search", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        let main = NSMenu()
+        for (title, submenu) in [("Emoji Search", app), ("Edit", edit)] {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.submenu = submenu
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
     }
 
     // MARK: - Status item

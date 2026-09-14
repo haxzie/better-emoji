@@ -22,21 +22,30 @@ final class PickerPanel: NSPanel {
         hidesOnDeactivate = false
         animationBehavior = .utilityWindow
         contentView = view
-        // Always light — matches the web app aesthetic.
-        appearance = NSAppearance(named: .aqua)
+        appearance = NSAppearance(named: .darkAqua)
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    /// Emacs-style ctrl+letter bindings (ctrl+a = beginning, ctrl+e = end, ctrl+k = kill, …)
-    /// don't reach the field editor in a non-activating panel because AppKit's text system
-    /// skips `interpretKeyEvents` when the hosting app isn't "active". Re-deliver them
-    /// directly onto the first responder so the standard key-binding machinery handles them.
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown,
-           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control,
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // ⌘A/⌘C/⌘V/… — a non-activating panel isn't guaranteed to get the main menu's
+        // key-equivalent pass, so run it explicitly.
+        if event.type == .keyDown, mods.contains(.command),
+           NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            return
+        }
+        if event.type == .keyDown, mods == .control,
            let fr = firstResponder, fr !== self {
+            // ⌃A selects all, like ⌘A. (AppKit's default is the Emacs "go to start of
+            // line", which nobody expects in a one-line search box.)
+            if event.charactersIgnoringModifiers == "a" {
+                fr.tryToPerform(#selector(NSText.selectAll(_:)), with: nil)
+                return
+            }
+            // Other ⌃-letter bindings (⌃E end, ⌃K kill, …) don't reach the field editor
+            // in a non-activating panel; hand them straight to the first responder.
             fr.tryToPerform(#selector(NSResponder.keyDown(with:)), with: event)
             return
         }

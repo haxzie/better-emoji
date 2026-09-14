@@ -7,8 +7,9 @@ enum SemanticState: Equatable {
     case failed(String)
 }
 
-/// Runs keyword search on every keystroke and merges semantic hits in after an
-/// 80 ms debounce — the same policy as the web app (apps/web/src/main.ts).
+/// Debounces keystrokes (100 ms), then runs keyword + semantic search together so the
+/// grid re-renders once per pause instead of once per key. Scoring mirrors the web app
+/// (apps/web/src/main.ts).
 @MainActor
 final class SearchEngine: ObservableObject {
     @Published var query = "" { didSet { queryChanged() } }
@@ -23,7 +24,7 @@ final class SearchEngine: ObservableObject {
 
     private let resultLimit = 64
     private let semanticCandidates = 200
-    private let debounce: Duration = .milliseconds(80)
+    private let debounce: Duration = .milliseconds(100)
     private let keywordWeight: Float = 0.5     // final = semantic + keywordWeight * keyword
     private let semanticFloor: Float = 0.35    // absolute floor — matches web SEMANTIC_FLOOR
     private let semanticRelative: Float = 0.55 // drop hits < this fraction of best — matches web SEMANTIC_RELATIVE
@@ -58,7 +59,7 @@ final class SearchEngine: ObservableObject {
         self.index = index
         self.embedder = embedder
         semantic = .ready
-        if !query.isEmpty { runSemantic() }
+        if !query.isEmpty { runSearch() }
     }
 
     private func semanticFailed(_ message: String) {
@@ -74,20 +75,23 @@ final class SearchEngine: ObservableObject {
             results = []
             return
         }
-        keywordHits = keyword.search(q, limit: resultLimit)
-        results = merge(keywordHits, semantic: nil)
-        guard semantic == .ready else { return }
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: self?.debounce ?? .zero)
             guard !Task.isCancelled else { return }
-            self?.runSemantic()
+            self?.runSearch()
         }
     }
 
-    private func runSemantic() {
-        guard let embedder, let index else { return }
+    /// Keyword search is synchronous and cheap; semantic runs off-main and the two are
+    /// published together in `searchDone` so the grid updates once.
+    private func runSearch() {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
+        keywordHits = keyword.search(q, limit: resultLimit)
+        guard let embedder, let index else {
+            results = merge(keywordHits, semantic: nil)  // model still loading: keyword only
+            return
+        }
         let gen = generation
         let limit = semanticCandidates
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -95,11 +99,11 @@ final class SearchEngine: ObservableObject {
             guard let vec = try? embedder.embed(q) else { return }
             let hits = index.search(vec, limit: limit)
             let ms = Date().timeIntervalSince(t0) * 1000
-            await self?.semanticDone(hits, ms: ms, generation: gen)
+            await self?.searchDone(hits, ms: ms, generation: gen)
         }
     }
 
-    private func semanticDone(_ hits: [(Int, Float)], ms: Double, generation gen: Int) {
+    private func searchDone(_ hits: [(Int, Float)], ms: Double, generation gen: Int) {
         guard gen == generation else { return }  // stale
         lastQueryMs = ms
         results = merge(keywordHits, semantic: hits)
