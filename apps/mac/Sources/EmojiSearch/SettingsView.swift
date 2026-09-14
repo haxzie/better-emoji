@@ -64,9 +64,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             ScrollView {
+                header
                 Form {
                     generalSection
                     shortcutSection
@@ -86,21 +85,22 @@ struct SettingsView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
             Image(nsImage: NSImage(byReferencing: Bundle.module.url(forResource: "logo", withExtension: "png")!))
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 56, height: 56)
-            VStack(alignment: .leading, spacing: 3) {
+                .frame(width: 36, height: 36)
+            VStack(alignment: .leading, spacing: 1) {
                 Text("Better Emoji")
-                    .font(.title2.bold())
+                    .font(.headline)
                 Text("Semantic emoji picker for macOS")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 2)
     }
 
     // MARK: General
