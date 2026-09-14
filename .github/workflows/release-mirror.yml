@@ -222,7 +222,17 @@ jobs:
           DMG: ${{ steps.release.outputs.dmg }}
         run: |
           set -eu
-          curl -fsSL "$PUBLIC_URL/$PREFIX/latest.json" | tee /dev/stderr | grep -q "\"version\": *\"$VERSION\""
+          # latest.json is edge-cached for 60 s, so the copy the world sees can lag the
+          # upload by up to a minute. Poll the real URL (no cache-busting — we want to
+          # verify what users get) until it flips, then give up.
+          for i in $(seq 1 15); do
+            if curl -fsSL "$PUBLIC_URL/$PREFIX/latest.json" | grep -q "\"version\": *\"$VERSION\""; then
+              break
+            fi
+            [ "$i" = 15 ] && { echo "::error::latest.json still isn't $VERSION after 90 s"; exit 1; }
+            sleep 6
+          done
+          curl -fsSL "$PUBLIC_URL/$PREFIX/latest.json"
           for f in "$FILE" ${DMG:+"$DMG"}; do
             code=$(curl -sIL -o /dev/null -w '%{http_code}' "$PUBLIC_URL/$PREFIX/$VERSION/$f")
             [ "$code" = "200" ] || { echo "::error::$PUBLIC_URL/$PREFIX/$VERSION/$f returned $code"; exit 1; }
