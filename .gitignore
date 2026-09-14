@@ -5,3 +5,4 @@ dist
 .wrangler
 .build
 .turbo
+apps/mac/dmg/background.tiff

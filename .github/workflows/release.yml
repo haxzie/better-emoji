@@ -123,6 +123,9 @@ jobs:
       # DMG is what a person downloads from the site. The app is notarized and
       # stapled first, then the DMG that wraps it is notarized and stapled too,
       # so both open cleanly with no network round-trip to Apple.
+      - name: Install dmgbuild
+        run: python3 -m pip install --quiet dmgbuild || python3 -m pip install --quiet --break-system-packages dmgbuild
+
       - name: Notarize app, build DMG, notarize DMG
         working-directory: apps/mac
         env:
@@ -154,13 +157,8 @@ jobs:
           xcrun stapler staple "build/$APP.app"
           spctl --assess --type execute --verbose=2 "build/$APP.app"
 
-          # 2. The DMG: stapled app + an Applications shortcut to drag it onto.
-          STAGE="$RUNNER_TEMP/dmg"
-          mkdir -p "$STAGE"
-          ditto "build/$APP.app" "$STAGE/$APP.app"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "$APP" -srcfolder "$STAGE" -ov -quiet \
-            -fs HFS+ -format UDZO -imagekey zlib-level=9 "build/$DMG"
+          # 2. The installer DMG (layout: dmg/settings.py) wrapping the stapled app.
+          bash scripts/make-dmg.sh "build/$APP.app" "build/$DMG"
           codesign --force --timestamp --identifier com.haxzie.better-emoji.dmg --sign "$SIGN_IDENTITY" "build/$DMG"
           notarize "build/$DMG"
           xcrun stapler staple "build/$DMG"
