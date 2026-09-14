@@ -52,11 +52,10 @@ struct SettingsView: View {
     @AppStorage("shortcutCmd")      private var shortcutCmd      = false
 
     // ── Transient state ────────────────────────────────────────────────────
-    @State private var launchAtLogin       = SMAppService.mainApp.status == .enabled
+    @State private var launchAtLogin        = SMAppService.mainApp.status == .enabled
     @State private var accessibilityGranted = AXIsProcessTrusted()
     @State private var isRecordingShortcut  = false
-    @State private var updateLabel: String? = nil
-    @State private var checkingUpdate       = false
+    @StateObject private var updater        = UpdateChecker()
 
     private let version   = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
     private let githubURL = URL(string: "https://github.com/haxzie/better-emoji")!
@@ -69,6 +68,7 @@ struct SettingsView: View {
                 generalSection
                 shortcutSection
                 permissionsSection
+                updateSection
             }
             .formStyle(.grouped)
             Divider()
@@ -192,23 +192,104 @@ struct SettingsView: View {
         } header: { Text("Permissions") }
     }
 
+    // MARK: Update
+
+    @ViewBuilder
+    private var updateSection: some View {
+        Section {
+            switch updater.state {
+
+            case .idle:
+                LabeledContent {
+                    Button("Check for Updates") { updater.check() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                } label: {
+                    Label {
+                        Text("Software Update")
+                    } icon: { Image(systemName: "arrow.down.circle") }
+                }
+
+            case .checking:
+                LabeledContent {
+                    ProgressView().controlSize(.small)
+                } label: {
+                    Label("Checking…", systemImage: "arrow.down.circle")
+                }
+
+            case .upToDate:
+                Label("You're up to date ✓", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+
+            case .available(let ver, let notes, let htmlUrl, let zipUrl):
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("v\(ver) is available", systemImage: "arrow.down.circle.fill")
+                            .foregroundStyle(Color.accentColor).font(.headline)
+                        Spacer()
+                        Text("You have v\(version)").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let notes, !notes.isEmpty {
+                        Text(notes)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(4)
+                    }
+                    HStack(spacing: 8) {
+                        if let zip = zipUrl {
+                            Button("Update Now") { updater.install(zipUrl: zip, htmlUrl: htmlUrl) }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                        }
+                        Button(zipUrl == nil ? "Open Releases Page" : "View Release Notes") {
+                            NSWorkspace.shared.open(URL(string: htmlUrl)!)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.vertical, 4)
+
+            case .downloading(let progress, let total):
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Label("Downloading update…", systemImage: "arrow.down.circle")
+                        Spacer()
+                        if total > 0 {
+                            Text(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    ProgressView(value: progress)
+                        .progressViewStyle(.linear)
+                    Text("\(Int(progress * 100))%")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+
+            case .installing:
+                Label("Installing… the app will relaunch", systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(.secondary)
+
+            case .failed(let msg):
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Update failed", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                    Text(msg).font(.caption).foregroundStyle(.secondary)
+                    Button("Try Again") { updater.retry() }
+                        .buttonStyle(.bordered).controlSize(.small)
+                }
+                .padding(.vertical, 4)
+            }
+        } header: { Text("Updates") }
+    }
+
     // MARK: Footer
 
     private var footer: some View {
         HStack(spacing: 10) {
             Text("v\(version)")
                 .font(.caption).foregroundStyle(.tertiary)
-
-            Divider().frame(height: 10)
-
-            if checkingUpdate {
-                ProgressView().controlSize(.mini)
-            } else if let label = updateLabel {
-                Text(label).font(.caption).foregroundStyle(.secondary)
-            } else {
-                Button("Check for Updates") { checkForUpdates() }
-                    .buttonStyle(.plain).font(.caption).foregroundStyle(Color.accentColor)
-            }
 
             Spacer()
 
@@ -241,26 +322,6 @@ struct SettingsView: View {
         check()
     }
 
-    private func checkForUpdates() {
-        checkingUpdate = true
-        let url = URL(string: "https://api.github.com/repos/haxzie/better-emoji/releases/latest")!
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            DispatchQueue.main.async {
-                checkingUpdate = false
-                guard let data,
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let tag  = json["tag_name"] as? String else {
-                    updateLabel = "Couldn't check"; return
-                }
-                let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-                if latest == version {
-                    updateLabel = "You're up to date ✓"
-                } else {
-                    updateLabel = "v\(latest) available"
-                }
-            }
-        }.resume()
-    }
 }
 
 // MARK: - Shortcut Recorder
