@@ -13,6 +13,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             probe(Array(args.dropFirst(2)))
             return
         }
+        // `--anchor out.txt`: report Accessibility status and the caret rect we'd anchor
+        // to (whatever is focused when this runs), then quit. Launch via `open` so TCC
+        // attributes the request to the app, not the shell.
+        if let i = args.firstIndex(of: "--anchor"), args.count > i + 1 {
+            let trusted = AXIsProcessTrusted()
+            let anchor = FocusAnchor.current().map { "\($0)" } ?? "nil"
+            let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+            try? "trusted=\(trusted) frontmost=\(front) anchor=\(anchor)\n".write(toFile: args[i + 1], atomically: true, encoding: .utf8)
+            return
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

@@ -47,6 +47,13 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
+# Local builds: use the Developer ID cert if it's in the keychain. Ad-hoc signatures
+# change on every build, and macOS quietly drops the Accessibility grant for the
+# "new" app each time — a stable identity keeps caret anchoring and paste working.
+if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
+  SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')
+fi
+
 if [ -n "${SIGN_IDENTITY:-}" ]; then
   # ONNX Runtime is linked statically, so there's nothing nested to sign —
   # one hardened-runtime signature on the bundle is all notarization needs.
