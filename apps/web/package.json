@@ -9,14 +9,18 @@
     "dev": "vite",
     "prebuild": "node scripts/sync-assets.mjs",
     "build": "vite build",
+    "build:cf": "pnpm -w index:fetch-model && pnpm -w build --filter=@emoji-search/web",
     "preview": "vite preview",
-    "typecheck": "tsc -p .",
-    "ship": "pnpm build && wrangler deploy"
+    "dev:worker": "pnpm build && wrangler dev",
+    "typecheck": "tsc -p . && tsc -p server",
+    "ship": "pnpm build && wrangler deploy",
+    "clean": "rm -rf dist .turbo .wrangler"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260914.1",
     "@emoji-search/index": "workspace:*",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",

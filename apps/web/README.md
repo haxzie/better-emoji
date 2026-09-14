@@ -1,7 +1,8 @@
-# Emoji Search
+# Better Emoji — web
 
-Semantic emoji search that runs entirely in the browser. Type "ship it", "feeling great" or
-"we won" and get 🚀, 😀, 🏆 — no server, no API calls.
+The landing page (nav with GitHub stars, hero with the download button) and the in-browser
+picker under it. Semantic emoji search that runs entirely in the browser. Type "ship it",
+"feeling great" or "we won" and get 🚀, 😀, 🏆 — no server, no API calls.
 
 ```
 pnpm install && pnpm index:fetch-model   # from the workspace root
@@ -45,6 +46,46 @@ pnpm --filter @emoji-search/index gen-phrasings   # only emoji without phrasings
 pnpm index:build
 ```
 
+## The Worker (`server/`)
+
+`wrangler.jsonc` serves `dist/` as static assets and routes just three paths to
+`server/index.ts` (`run_worker_first`):
+
+| Path | What |
+|---|---|
+| `/download` | 302 to the URL in `releases/latest.json`; falls back to the GitHub releases page |
+| `/releases/latest.json` | The manifest `release-mirror.yml` writes to the `better-emoji` R2 bucket |
+| `/releases/<version>/<zip>` | The build, streamed from R2 and cached at the edge |
+
+`src/site.ts` reads `/releases/latest.json` for the version badge under the hero button and
+`api.github.com` (client-side, cached an hour in localStorage) for the star count. Both
+fail silently.
+
+`pnpm dev:worker` builds and runs the whole thing under `wrangler dev`; the local R2 is
+empty, so `/download` goes to GitHub. To try the R2 path:
+
+```
+npx wrangler r2 object put better-emoji/releases/latest.json --file latest.json --local --content-type application/json
+```
+
+## Deploying
+
+Production deploys come from git via **Cloudflare Workers Builds**, configured on the
+`better-emoji` Worker (dashboard → Workers & Pages → better-emoji → Settings → Build):
+
+| Setting | Value |
+|---|---|
+| Git repository | `haxzie/better-emoji`, branch `main` |
+| Root directory | `/apps/web/` |
+| Build command | `pnpm run build:cf` |
+| Deploy command | `npx wrangler deploy` (default) |
+| Non-production branch deploy command | `npx wrangler versions upload` (default; uploads a preview, doesn't promote it) |
+| Build watch paths (include) | `apps/web/*`, `packages/emoji-index/*`, `pnpm-lock.yaml`, `turbo.json` |
+
+`build:cf` downloads the encoder first because it isn't in git, then runs the turbo build
+from the workspace root. No API token is needed anywhere; `pnpm ship` still works for a
+manual deploy from a logged-in wrangler.
+
 ## Keyboard
 
 | Key | Action |
@@ -61,8 +102,10 @@ pnpm index:build
 |---|---|
 | `pnpm dev` | Vite dev server |
 | `pnpm build` | Production build to `dist/` |
-| `pnpm ship` | Build and deploy to Cloudflare Workers (emoji.haxzie.com) |
-| `pnpm typecheck` | `tsc` |
+| `pnpm dev:worker` | Build, then `wrangler dev` (static assets + the Worker) |
+| `pnpm ship` | Build and deploy to Cloudflare Workers by hand (emoji.haxzie.com) |
+| `pnpm build:cf` | What Workers Builds runs: fetch the encoder, then the turbo build from the workspace root |
+| `pnpm typecheck` | `tsc` for the site and the Worker |
 | `pnpm index:build` (root) | Rebuild the embedding index |
 | `pnpm index:probe "query" …` (root) | Print top semantic hits from Node (no browser) |
 

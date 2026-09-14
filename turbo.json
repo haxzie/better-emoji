@@ -1,0 +1,28 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  // The web build copies the index + encoder out of packages/emoji-index via
+  // scripts/sync-assets.mjs rather than through a task dependency — the index
+  // is committed, and rebuilding it means a network trip to Hugging Face and
+  // float output that never hashes the same twice. Listing the files here is
+  // what makes a fresh index invalidate the cached web build.
+  "globalDependencies": ["packages/emoji-index/dist/**", "packages/emoji-index/models/**"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["^build"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

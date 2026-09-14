@@ -4,7 +4,7 @@
 //   2. Embed each blob with all-MiniLM-L6-v2, average, L2-normalize
 //   3. Quantize to int8 and write dist/emoji-index.bin + dist/emoji-meta.json
 //
-// Run with: pnpm build
+// Run with: pnpm index:build (from the workspace root)
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
