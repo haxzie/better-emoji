@@ -229,7 +229,7 @@ struct SettingsView: View {
                 Label("You're up to date ✓", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
 
-            case .available(let ver, let notes, let htmlUrl, let zipUrl):
+            case .available(let ver, let notes, let htmlUrl, let zipUrl, let sha256):
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Label("v\(ver) is available", systemImage: "arrow.down.circle.fill")
@@ -245,7 +245,7 @@ struct SettingsView: View {
                     }
                     HStack(spacing: 8) {
                         if let zip = zipUrl {
-                            Button("Update Now") { updater.install(zipUrl: zip, htmlUrl: htmlUrl) }
+                            Button("Update Now") { updater.install(zipUrl: zip, htmlUrl: htmlUrl, sha256: sha256) }
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.small)
                         }

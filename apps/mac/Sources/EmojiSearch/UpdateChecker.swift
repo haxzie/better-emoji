@@ -1,25 +1,19 @@
 import AppKit
+import CryptoKit
 import Foundation
 
-// MARK: - GitHub types
+// MARK: - Manifest
 
-private struct GHRelease: Decodable {
-    let tagName: String
-    let htmlUrl: String
-    let body: String?
-    let assets: [GHAsset]
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"; case htmlUrl = "html_url"; case body; case assets
-    }
-}
-
-private struct GHAsset: Decodable {
-    let name: String
-    let browserDownloadUrl: String
-    let size: Int
-    enum CodingKeys: String, CodingKey {
-        case name; case browserDownloadUrl = "browser_download_url"; case size
-    }
+/// `https://emoji.haxzie.com/releases/latest.json`, written by
+/// .github/workflows/release-mirror.yml after every release. Served from our own
+/// Worker + R2, so the repo can stay private and there's no API rate limit.
+private struct Manifest: Decodable {
+    let version: String
+    let tag: String
+    let publishedAt: String
+    let url: String      // the zip, on emoji.haxzie.com
+    let size: Int64
+    let sha256: String
 }
 
 // MARK: - Checker
@@ -31,7 +25,7 @@ final class UpdateChecker: NSObject, ObservableObject {
         case idle
         case checking
         case upToDate
-        case available(version: String, notes: String?, htmlUrl: String, zipUrl: String?)
+        case available(version: String, notes: String?, htmlUrl: String, zipUrl: String?, sha256: String?)
         case downloading(progress: Double, total: Int64)
         case installing
         case failed(String)
@@ -40,7 +34,8 @@ final class UpdateChecker: NSObject, ObservableObject {
     @Published var state: State = .idle
 
     private let currentVersion: String
-    private let apiURL = URL(string: "https://api.github.com/repos/haxzie/better-emoji/releases/latest")!
+    private let manifestURL = URL(string: "https://emoji.haxzie.com/releases/latest.json")!
+    private let releasesURL  = "https://github.com/haxzie/better-emoji/releases/tag/"
     private var session: URLSession?
     private var downloadContinuation: CheckedContinuation<URL, Error>?
 
@@ -55,15 +50,13 @@ final class UpdateChecker: NSObject, ObservableObject {
         state = .checking
         Task {
             do {
-                var req = URLRequest(url: apiURL, cachePolicy: .reloadIgnoringLocalCacheData)
-                req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-                let (data, _) = try await URLSession.shared.data(for: req)
-                let release   = try JSONDecoder().decode(GHRelease.self, from: data)
-                let latest    = versionString(from: release.tagName)
-                if newerThan(current: currentVersion, candidate: latest) {
-                    let zip = release.assets.first(where: { isMacZip($0.name) })?.browserDownloadUrl
-                    state = .available(version: latest, notes: firstLines(release.body, 3),
-                                      htmlUrl: release.htmlUrl, zipUrl: zip)
+                let req = URLRequest(url: manifestURL, cachePolicy: .reloadIgnoringLocalCacheData)
+                let (data, response) = try await URLSession.shared.data(for: req)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Err("No release published yet") }
+                let m = try JSONDecoder().decode(Manifest.self, from: data)
+                if newerThan(current: currentVersion, candidate: m.version) {
+                    state = .available(version: m.version, notes: nil,
+                                      htmlUrl: releasesURL + m.tag, zipUrl: m.url, sha256: m.sha256)
                 } else {
                     state = .upToDate
                     try? await Task.sleep(for: .seconds(4))
@@ -76,7 +69,7 @@ final class UpdateChecker: NSObject, ObservableObject {
     }
 
     /// Download and install the update in-place, then relaunch.
-    func install(zipUrl: String, htmlUrl: String) {
+    func install(zipUrl: String, htmlUrl: String, sha256: String? = nil) {
         // If we can't write to the app's parent directory, open the releases page.
         let parent = Bundle.main.bundleURL.deletingLastPathComponent()
         guard FileManager.default.isWritableFile(atPath: parent.path) else {
@@ -89,6 +82,7 @@ final class UpdateChecker: NSObject, ObservableObject {
             do {
                 let zipURL = try await download(from: URL(string: zipUrl)!)
                 state = .installing
+                if let sha256 { try verify(zipURL, sha256: sha256) }
                 try await unzipAndReplace(zipURL: zipURL)
                 // The replacement shell script outlives us; quit so it can run.
                 NSApp.terminate(nil)
@@ -159,32 +153,30 @@ final class UpdateChecker: NSObject, ObservableObject {
 
     // MARK: - Helpers
 
+    /// A bad download must never replace the app.
+    private func verify(_ file: URL, sha256 expected: String) throws {
+        let data = try Data(contentsOf: file, options: .mappedIfSafe)
+        let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard actual == expected.lowercased() else {
+            throw Err("Download is corrupt (checksum mismatch)")
+        }
+    }
+
     private func waitForExit(_ p: Process) async {
         await withCheckedContinuation { cont in
             DispatchQueue.global().async { p.waitUntilExit(); cont.resume() }
         }
     }
 
-    private func versionString(from tag: String) -> String {
-        tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-    }
 
     private func newerThan(current: String, candidate: String) -> Bool {
         candidate.compare(current, options: .numeric) == .orderedDescending
     }
 
-    private func isMacZip(_ name: String) -> Bool {
-        let lower = name.lowercased()
-        return lower.hasSuffix(".zip") && (lower.contains("mac") || lower.contains("macos") || lower.contains("osx"))
-    }
 
     /// Shell-quote a path.
     private func sq(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: #"'\''}"#) + "'" }
 
-    private func firstLines(_ text: String?, _ n: Int) -> String? {
-        guard let text, !text.isEmpty else { return nil }
-        return text.components(separatedBy: "\n").prefix(n).joined(separator: "\n")
-    }
 
     private struct Err: LocalizedError {
         let errorDescription: String?
