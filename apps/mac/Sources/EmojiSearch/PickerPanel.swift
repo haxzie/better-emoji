@@ -141,7 +141,7 @@ final class PickerPanel: NSPanel {
     func hide() {
         guard !hiding else { return }
         hiding = true
-        animate(scale: 0.85, alpha: 0, duration: 0.14,
+        animate(scale: 0.9, alpha: 0, duration: 0.08,
                 timing: CAMediaTimingFunction(name: .easeIn)) { [weak self] in
             guard let self, self.hiding else { return }
             self.orderOut(nil)
