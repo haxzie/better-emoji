@@ -22,6 +22,13 @@ final class PickerPanel: NSPanel {
         hidesOnDeactivate = false
         animationBehavior = .utilityWindow
         contentView = view
+        // Liquid Glass draws its rim along the window's backdrop, which for a borderless
+        // window is a hard rectangle. Round the content layer so the backdrop matches the
+        // panel shape.
+        view.wantsLayer = true
+        view.layer?.cornerRadius = PickerView.cornerRadius
+        view.layer?.cornerCurve = .continuous
+        view.layer?.masksToBounds = true
         appearance = NSAppearance(named: .darkAqua)
     }
 

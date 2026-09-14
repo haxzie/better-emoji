@@ -14,6 +14,7 @@ struct PickerView: View {
     static let cellSize: CGFloat = 56
     static let width: CGFloat = 364
     static let height: CGFloat = 480
+    static let cornerRadius: CGFloat = 20
 
     @EnvironmentObject private var engine: SearchEngine
     @EnvironmentObject private var panel: PanelState
@@ -282,7 +283,7 @@ struct PickerView: View {
 /// Only the panel itself is glass — controls inside sit on it with flat fills,
 /// per Apple's guidance not to stack glass on glass.
 private struct PanelChrome: ViewModifier {
-    private let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+    private let shape = RoundedRectangle(cornerRadius: PickerView.cornerRadius, style: .continuous)
 
     func body(content: Content) -> some View {
         if #available(macOS 26, *) {

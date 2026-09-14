@@ -126,9 +126,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func snapshot(to path: String) {
-        guard let view = panel.contentView,
-              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-        view.cacheDisplay(in: view.bounds, to: rep)
+        // Ask the window server for the composited window (glass, blur and all) — allowed
+        // without Screen Recording permission because the window is ours. Pad the capture
+        // so anything drawn outside the window bounds (shadow, stray borders) is visible.
+        let pad: CGFloat = 12
+        let f = panel.frame
+        let primaryH = NSScreen.screens.first?.frame.height ?? 0
+        let quartz = CGRect(x: f.minX - pad, y: primaryH - f.maxY - pad, width: f.width + 2 * pad, height: f.height + 2 * pad)
+        guard let cg = CGWindowListCreateImage(quartz, .optionIncludingWindow, CGWindowID(panel.windowNumber), [.bestResolution]) else { return }
+        let rep = NSBitmapImageRep(cgImage: cg)
         if let png = rep.representation(using: .png, properties: [:]) {
             try? png.write(to: URL(fileURLWithPath: path))
         }
