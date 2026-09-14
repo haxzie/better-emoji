@@ -397,6 +397,10 @@ body {
 
 .results {
   padding-top: 8px;
+  /* Never shorter than the viewport below the sticky search bar. Otherwise a
+     query with few hits shrinks the page, the browser clamps the scroll
+     position, and the hero jumps back into view mid-typing. */
+  min-height: calc(100vh - 86px);
 }
 
 .section + .section {
