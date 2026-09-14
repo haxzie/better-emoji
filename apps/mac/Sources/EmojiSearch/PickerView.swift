@@ -11,8 +11,8 @@ final class PanelState: ObservableObject {
 
 struct PickerView: View {
     static let columns = 6
-    static let cellSize: CGFloat = 56
-    static let width: CGFloat = 364
+    static let cellSize: CGFloat = 52
+    static let width: CGFloat = 340
     static let height: CGFloat = 480
     static let cornerRadius: CGFloat = 20
 
