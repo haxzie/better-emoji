@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         panelState.onPick = { [weak self] _, char in
             self?.panel.hide()
-            let pasted = Inserter.insert(char)
+            let pasted = Inserter.insert(char, into: self?.panel.targetApp)
             if !pasted { self?.showCopiedFeedback(char) }
         }
         panelState.onDismiss = { [weak self] in self?.panel.hide() }
@@ -145,9 +145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             guard let ev = NSEvent.keyEvent(
                 with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: modifiers, timestamp: 0,
                 windowNumber: panel.windowNumber, context: nil, characters: characters,
-                charactersIgnoringModifiers: chars, isARepeat: false, keyCode: 0
+                charactersIgnoringModifiers: chars, isARepeat: false,
+                keyCode: chars == "\r" ? 36 : chars == "\u{1B}" ? 53 : 0  // ⏎ and ⎋ need their real key codes
             ) else { continue }
-            panel.sendEvent(ev)
+            NSApp.sendEvent(ev)
         }
     }
 

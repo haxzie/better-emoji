@@ -1,9 +1,12 @@
 import AppKit
+import os
 
 /// Floating, non-activating panel: the app that had focus keeps it, so a pick
 /// can paste straight into it — the same trick the system emoji picker uses.
 final class PickerPanel: NSPanel {
     var onHide: (() -> Void)?
+    /// The app the user was typing in when the picker opened — where a pick is pasted.
+    private(set) var targetApp: NSRunningApplication?
 
     init(contentView view: NSView) {
         super.init(
@@ -69,6 +72,10 @@ final class PickerPanel: NSPanel {
     /// of the frontmost app, left edge lined up with it, flipping above when there's no
     /// room. `anchor` overrides that (e.g. the menu bar button); with neither, the mouse.
     func show(anchor explicit: NSRect? = nil) {
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            targetApp = front
+        }
         let mouse = NSEvent.mouseLocation
         let anchor = explicit ?? FocusAnchor.current() ?? NSRect(x: mouse.x, y: mouse.y, width: 0, height: 0)
         let screen = NSScreen.screens.first { $0.frame.contains(NSPoint(x: anchor.midX, y: anchor.midY)) } ?? NSScreen.main
@@ -139,11 +146,13 @@ final class PickerPanel: NSPanel {
     }
 
     func hide() {
-        guard !hiding else { return }
+        guard !hiding else { Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("hide ignored: already hiding"); return }
+        Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("hide: start (visible=\(self.isVisible) key=\(self.isKeyWindow))")
         hiding = true
         animate(scale: 0.9, alpha: 0, duration: 0.08,
                 timing: CAMediaTimingFunction(name: .easeIn)) { [weak self] in
-            guard let self, self.hiding else { return }
+            guard let self, self.hiding else { Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("hide: completion skipped"); return }
+            Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("hide: orderOut")
             self.orderOut(nil)
             self.contentView?.layer?.transform = CATransform3DIdentity
             self.alphaValue = 1

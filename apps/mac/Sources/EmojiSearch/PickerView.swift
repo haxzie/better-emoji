@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 /// Shared between the AppKit panel and the SwiftUI view.
 @MainActor
@@ -22,7 +23,7 @@ struct PickerView: View {
     @State private var category: Category = .smileys
     /// Always points at something (the first emoji by default) so ⏎ inserts it.
     /// Hover moves it; ↑↓ move it and start keyboard navigation.
-    @State private var selection: Int?
+    @State private var selection: Int? = 0
     /// True once ↑/↓ has been pressed: ←/→ then move the selection instead of the text
     /// cursor, and selection changes scroll the grid.
     @State private var navigating = false
@@ -289,12 +290,14 @@ struct PickerView: View {
 
     /// Flash the check on the cell, then hand off (which closes the panel and inserts).
     private func pick(_ e: Emoji, _ char: String, at position: Int) {
-        guard picked == nil else { return }  // already on the way out
+        guard picked == nil else { Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("pick ignored: already picking"); return }  // already on the way out
+        Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("pick \(char, privacy: .public) at \(position)")
         engine.store.touchRecent(e)
         picked = position
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("pick → onPick")
             panel.onPick(e, char)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { picked = nil }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("pick → clear badge"); picked = nil }
         }
     }
 }

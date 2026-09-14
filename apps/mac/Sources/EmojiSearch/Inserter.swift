@@ -1,24 +1,39 @@
 import AppKit
+import os
 import ApplicationServices
 
 /// Puts the emoji into whatever app was frontmost. With Accessibility access we
 /// paste it (and restore the previous clipboard); without, it's just copied.
+private let log = Logger(subsystem: "com.haxzie.better-emoji", category: "pick")
+
 enum Inserter {
     static var canPaste: Bool { AXIsProcessTrusted() }
 
     /// Puts the emoji into the active app.
     /// - Returns: `true` if it pasted via Cmd+V (Accessibility granted), `false` if clipboard-only.
     @discardableResult
-    static func insert(_ text: String) -> Bool {
+    static func insert(_ text: String, into target: NSRunningApplication? = nil) -> Bool {
         let pb = NSPasteboard.general
         let saved = snapshot(pb)
         pb.clearContents()
         pb.setString(text, forType: .string)
+        log.info("insert \(text, privacy: .public): trusted=\(canPaste) target=\(target?.localizedName ?? "?", privacy: .public) weAreActive=\(NSApp.isActive)")
         guard canPaste else { return false }
         // Give the panel a beat to close so the keystroke lands in the previous app.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            postCommandV()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { restore(pb, saved) }
+            // ⌘V goes to the *active* app. If that's us (it is, after the Settings window
+            // has been open), hand activation back to the app the picker was opened over.
+            var delay: TimeInterval = 0
+            if NSApp.isActive, let target, !target.isActive {
+                log.info("we're active — activating \(target.localizedName ?? "?", privacy: .public) first")
+                target.activate()
+                delay = 0.12
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                log.info("posting ⌘V; front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?", privacy: .public)")
+                postCommandV()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { restore(pb, saved) }
+            }
         }
         return true
     }

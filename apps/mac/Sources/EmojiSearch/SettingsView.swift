@@ -37,8 +37,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        // Retreat back to menu-bar-only mode when the window is dismissed.
+        // Retreat to menu-bar-only mode *and* give activation back. Just flipping the
+        // policy left the app "active" with no windows, so a later ⌘V from the picker
+        // was delivered to us instead of the field the user was typing in.
         NSApp.setActivationPolicy(.accessory)
+        NSApp.deactivate()
     }
 }
 
