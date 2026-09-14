@@ -40,11 +40,19 @@ export async function fetchStars(): Promise<number | null> {
   }
 }
 
-/** What release-mirror.yml writes to R2 and the Worker serves at /releases/latest.json. */
+/**
+ * What release-mirror.yml writes to R2 and the Worker serves at /releases/latest.json.
+ * The top-level `url`/`size` are the zip (for the in-app updater); `dmg` is what
+ * /download hands people, so that's the size shown under the button.
+ */
 export interface Release {
   version: string;
   size: number;
   url: string;
+}
+
+interface Manifest extends Partial<Release> {
+  dmg?: { url?: unknown; size?: unknown };
 }
 
 /**
@@ -55,9 +63,11 @@ export async function fetchLatestRelease(): Promise<Release | null> {
   try {
     const r = await fetch('/releases/latest.json', { headers: { accept: 'application/json' } });
     if (!r.ok || !r.headers.get('content-type')?.includes('json')) return null;
-    const body = (await r.json()) as Partial<Release>;
-    if (typeof body.version !== 'string' || typeof body.size !== 'number' || typeof body.url !== 'string') return null;
-    return { version: body.version, size: body.size, url: body.url };
+    const body = (await r.json()) as Manifest;
+    if (typeof body.version !== 'string') return null;
+    const asset = typeof body.dmg?.url === 'string' && typeof body.dmg.size === 'number' ? body.dmg : body;
+    if (typeof asset.size !== 'number' || typeof asset.url !== 'string') return null;
+    return { version: body.version, size: asset.size, url: asset.url };
   } catch {
     return null;
   }
