@@ -17,7 +17,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private init() {
         let hosting = NSHostingController(rootView: SettingsView())
         let win = NSWindow(contentViewController: hosting)
-        win.title = "Emoji Search"
+        win.title = "Better Emoji"
         win.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         win.minSize = NSSize(width: 480, height: 520)
         win.setContentSize(NSSize(width: 480, height: 580))
@@ -92,7 +92,7 @@ struct SettingsView: View {
                 .interpolation(.high)
                 .frame(width: 56, height: 56)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Emoji Search")
+                Text("Better Emoji")
                     .font(.title2.bold())
                 Text("Semantic emoji picker for macOS")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -137,7 +137,7 @@ struct SettingsView: View {
                             Text("The keyboard shortcut is your only way to open the picker")
                                 .font(.caption).foregroundStyle(.orange)
                         } else {
-                            Text("Access Emoji Search from the menu bar")
+                            Text("Access Better Emoji from the menu bar")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }

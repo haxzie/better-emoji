@@ -1,12 +1,12 @@
-# Emoji Search for macOS
+# Better Emoji for macOS
 
 A menu bar emoji picker modelled on the system one (⌃⌘Space), with on-device semantic
 search. Press **⌃⌥Space** anywhere to open it.
 
 - Floating, non-activating panel near the cursor — the app you were typing in keeps focus
-- Search field on top; keyword hits appear instantly, semantic hits merge in ~80 ms later
-- Category tabs at the bottom (Frequently Used, Smileys, People, Animals, …) with sticky
-  section headers while browsing
+- Search field on top; keyword + semantic results land together ~100 ms after you stop typing
+- Category tabs at the bottom (Frequently Used, Smileys, People, Animals, …) with
+  section headers while browsing; Liquid Glass on macOS 26, material before that
 - Click or press ↵ to insert. Arrow keys move the selection, Esc clears/closes
 - Right-click an emoji for skin-tone variants
 - Menu bar icon: left-click opens the picker, right-click for the menu
@@ -19,7 +19,7 @@ into the frontmost app and restores your previous clipboard.
 
 ```
 pnpm index:fetch-model     # once, from the workspace root
-pnpm mac:run               # → apps/mac/build/Emoji Search.app
+pnpm mac:run               # → apps/mac/build/Better Emoji.app
 ```
 
 `scripts/bundle.sh` runs `swift build -c release`, assembles the `.app`, copies the index
@@ -29,7 +29,7 @@ Xcode 15+. No Xcode project — it's a plain SwiftPM package.
 ## Release
 
 `.github/workflows/release.yml` builds, signs (Developer ID + hardened runtime), notarizes,
-staples and publishes `Emoji-Search-macOS-v<version>.zip` as a GitHub release. The in-app
+staples and publishes `Better-Emoji-macOS-v<version>.zip` as a GitHub release. The in-app
 updater (Settings → Updates) looks for exactly that asset on the latest release.
 
 ```

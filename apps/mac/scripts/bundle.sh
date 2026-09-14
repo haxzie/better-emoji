@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the release binary and assembles build/Emoji Search.app with the
+# Builds the release binary and assembles build/Better Emoji.app with the
 # index + encoder copied in from packages/emoji-index.
 #
 # Env (all optional):
@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 
 INDEX_PKG="../../packages/emoji-index"
 MODEL_DIR="$INDEX_PKG/models/Xenova/all-MiniLM-L6-v2"
-APP="build/Emoji Search.app"
+APP="build/Better Emoji.app"
 
 for f in "$INDEX_PKG/dist/emoji-index.bin" "$INDEX_PKG/dist/emoji-meta.json" \
          "$MODEL_DIR/onnx/model_quantized.onnx" "$MODEL_DIR/tokenizer.json"; do

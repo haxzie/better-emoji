@@ -4,10 +4,10 @@
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleExecutable</key><string>EmojiSearch</string>
-  <key>CFBundleIdentifier</key><string>com.haxzie.emoji-search</string>
+  <key>CFBundleIdentifier</key><string>com.haxzie.better-emoji</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>Emoji Search</string>
-  <key>CFBundleDisplayName</key><string>Emoji Search</string>
+  <key>CFBundleName</key><string>Better Emoji</string>
+  <key>CFBundleDisplayName</key><string>Better Emoji</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>

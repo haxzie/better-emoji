@@ -10,10 +10,10 @@ final class PanelState: ObservableObject {
 }
 
 struct PickerView: View {
-    static let columns = 8
-    static let cellSize: CGFloat = 40
+    static let columns = 6
+    static let cellSize: CGFloat = 56
     static let width: CGFloat = 364
-    static let height: CGFloat = 444
+    static let height: CGFloat = 480
 
     @EnvironmentObject private var engine: SearchEngine
     @EnvironmentObject private var panel: PanelState
@@ -62,9 +62,7 @@ struct PickerView: View {
             footer
         }
         .frame(width: Self.width, height: Self.height)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.quaternary))
+        .modifier(PanelChrome())
         .onAppear { recent = engine.store.recent }
         .onChange(of: panel.shownCount) { _, _ in
             recent = engine.store.recent
@@ -117,7 +115,7 @@ struct PickerView: View {
                         columns: Array(repeating: GridItem(.fixed(Self.cellSize), spacing: 2), count: Self.columns),
                         alignment: .leading,
                         spacing: 2,
-                        pinnedViews: searching ? [] : [.sectionHeaders]
+                        pinnedViews: []
                     ) {
                         ForEach(sections) { section in
                             SwiftUI.Section {
@@ -149,15 +147,15 @@ struct PickerView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
-            .padding(.vertical, 6)
-            .background(.regularMaterial)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
             .id(c)
     }
 
     private func cell(_ e: Emoji, position: Int) -> some View {
         let highlighted = selection == position || (selection == nil && hovered == e)
         return Text(e.char)
-            .font(.system(size: 26))
+            .font(.system(size: 36))
             .frame(width: Self.cellSize, height: Self.cellSize)
             .background(
                 RoundedRectangle(cornerRadius: 8)
@@ -268,5 +266,25 @@ struct PickerView: View {
     private func pick(_ e: Emoji, _ char: String) {
         engine.store.touchRecent(e)
         panel.onPick(e, char)
+    }
+}
+
+/// Panel background: Liquid Glass on macOS 26+, translucent material before that.
+/// Only the panel itself is glass — controls inside sit on it with flat fills,
+/// per Apple's guidance not to stack glass on glass.
+private struct PanelChrome: ViewModifier {
+    private let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+        } else {
+            content
+                .background(.regularMaterial)
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(.quaternary))
+        }
     }
 }

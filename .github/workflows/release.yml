@@ -31,12 +31,12 @@ concurrency:
   group: release-${{ github.ref }}
 
 env:
-  APP: Emoji Search
+  APP: Better Emoji
   SIGN_IDENTITY: 'Developer ID Application: Musthaq Ahamad (2WH7TUH8N5)'
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +52,7 @@ jobs:
           {
             echo "version=$VERSION"
             echo "tag=v$VERSION"
-            echo "zip=Emoji-Search-macOS-v$VERSION.zip"
+            echo "zip=Better-Emoji-macOS-v$VERSION.zip"
           } >> "$GITHUB_OUTPUT"
 
       # ── JS: emoji index + encoder ──────────────────────────────────────────
@@ -155,7 +155,7 @@ jobs:
           gh release create "$TAG" \
             "apps/mac/build/$ZIP" "apps/mac/build/$ZIP.sha256" \
             --target "$GITHUB_SHA" \
-            --title "Emoji Search $TAG" \
+            --title "Better Emoji $TAG" \
             --generate-notes
 
       - name: Remove signing keychain

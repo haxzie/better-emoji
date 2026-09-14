@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             engine = SearchEngine(store: try EmojiStore())
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Emoji Search can't start"
+            alert.messageText = "Better Emoji can't start"
             alert.informativeText = error.localizedDescription
             alert.runModal()
             NSApp.terminate(nil)
@@ -176,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if useCmd   { mods |= UInt32(cmdKey)     }
         hotKey = HotKey(keyCode: UInt32(kc), modifiers: mods) { [weak self] in self?.toggle() }
         // Update the status bar tooltip to reflect the new shortcut.
-        statusItem?.button?.toolTip = "Emoji Search  \(shortcutDisplayString())"
+        statusItem?.button?.toolTip = "Better Emoji  \(shortcutDisplayString())"
     }
 
     @objc private func applyShortcutChange() { registerHotKey() }
@@ -208,13 +208,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
 
-        let app = NSMenu(title: "Emoji Search")
+        let app = NSMenu(title: "Better Emoji")
         app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         app.addItem(.separator())
-        app.addItem(withTitle: "Quit Emoji Search", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: "Quit Better Emoji", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         let main = NSMenu()
-        for (title, submenu) in [("Emoji Search", app), ("Edit", edit)] {
+        for (title, submenu) in [("Better Emoji", app), ("Edit", edit)] {
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             item.submenu = submenu
             main.addItem(item)
@@ -237,8 +237,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         guard let button = statusItem?.button else { return }
-        button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Emoji Search")
-        button.toolTip = "Emoji Search  \(shortcutDisplayString())"
+        button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Better Emoji")
+        button.toolTip = "Better Emoji  \(shortcutDisplayString())"
         button.target = self
         button.action = #selector(statusItemClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -253,8 +253,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.toolTip = "\(char) copied — press ⌘V to paste"
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             button.title = ""
-            button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Emoji Search")
-            button.toolTip = "Emoji Search  ⌃⌥Space"
+            button.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Better Emoji")
+            button.toolTip = "Better Emoji  \(self?.shortcutDisplayString() ?? "")"
             // Nudge the user to grant Accessibility once, so future picks auto-paste.
             if !AXIsProcessTrusted() { self?.nudgeAccessibility() }
         }
@@ -267,7 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hasNudgedAccessibility = true
         let alert = NSAlert()
         alert.messageText = "Enable auto-paste"
-        alert.informativeText = "Grant Accessibility access so Emoji Search can type emoji directly into any app — just like the system picker."
+        alert.informativeText = "Grant Accessibility access so Better Emoji can type emoji directly into any app — just like the system picker."
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Later")
         if alert.runModal() == .alertFirstButtonReturn {
@@ -287,7 +287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
 
         // Open item — shows the keyboard shortcut in the menu
-        let open = NSMenuItem(title: "Open Emoji Search", action: #selector(toggle), keyEquivalent: " ")
+        let open = NSMenuItem(title: "Open Better Emoji", action: #selector(toggle), keyEquivalent: " ")
         open.keyEquivalentModifierMask = [.control, .option]
         open.target = self
         menu.addItem(open)
