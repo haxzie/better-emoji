@@ -3,4 +3,4 @@ dist
 .context
 .DS_Store
 .wrangler
-public/models
+.build

@@ -1,0 +1,21 @@
+{
+  "name": "@emoji-search/index",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline emoji embedding index (all-MiniLM-L6-v2, int8) plus the encoder files the apps ship",
+  "files": ["dist", "models"],
+  "scripts": {
+    "build": "node scripts/build-index.mjs",
+    "fetch-model": "node scripts/fetch-model.mjs",
+    "gen-phrasings": "node scripts/gen-phrasings.mjs",
+    "probe": "node scripts/probe.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "emojibase-data": "^17.0.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.125.0"
+  }
+}

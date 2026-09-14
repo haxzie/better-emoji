@@ -1,35 +1,16 @@
 {
   "name": "emoji-search",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc -p .",
-    "build:index": "node scripts/build-index.mjs",
-    "gen:phrasings": "node scripts/gen-phrasings.mjs",
-    "probe": "node scripts/probe.mjs",
-    "deploy": "vite build && wrangler deploy",
-    "fetch:model": "node scripts/fetch-model.mjs",
-    "predev": "node scripts/fetch-model.mjs",
-    "prebuild": "node scripts/fetch-model.mjs"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
-  "private": "true",
-  "devDependencies": {
-    "@anthropic-ai/sdk": "^0.125.0",
-    "emojibase-data": "^17.0.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.0",
-    "wrangler": "^4.131.1"
-  },
-  "dependencies": {
-    "@huggingface/transformers": "^4.2.0"
+    "dev": "pnpm --filter @emoji-search/web dev",
+    "build": "pnpm --filter @emoji-search/web build",
+    "deploy": "pnpm --filter @emoji-search/web deploy",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "index:build": "pnpm --filter @emoji-search/index build",
+    "index:fetch-model": "pnpm --filter @emoji-search/index fetch-model",
+    "index:probe": "pnpm --filter @emoji-search/index probe",
+    "mac:build": "pnpm --filter @emoji-search/mac build",
+    "mac:run": "pnpm --filter @emoji-search/mac run"
   }
 }

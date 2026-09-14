@@ -1,72 +1,53 @@
 # Emoji Search
 
-Semantic emoji search that runs entirely in the browser. Type "ship it", "feeling great" or
+Semantic emoji search that runs entirely on-device. Type "ship it", "feeling great" or
 "we won" and get 🚀, 😀, 🏆 — no server, no API calls.
 
-```
-npm install
-npm run dev
-```
+- **Web:** https://emoji.haxzie.com
+- **macOS:** a menu bar picker that looks and behaves like the system emoji popup
+  (⌃⌥Space), with the same semantic ranking.
 
-## How it works
+## Layout
 
-**Offline** (`npm run build:index`, ~10 s on a laptop):
+pnpm workspace:
 
-1. For each of the 1,914 emoji in [emojibase](https://emojibase.dev/) (skin-tone variants
-   collapsed into their base), build a few text blobs: the CLDR name, the name + keywords, and
-   any natural-language phrasings from `scripts/phrasings.json`.
-2. Embed each blob with `all-MiniLM-L6-v2`, average, L2-normalize.
-3. Quantize to int8 (per-vector scale) and write `public/emoji-index.bin` (725 KB, ~200 KB
-   gzipped) plus `public/emoji-meta.json` (names, keywords, groups, skin tones).
-
-**In the browser:**
-
-- `src/worker.ts` — a Web Worker loads the q8 MiniLM encoder via Transformers.js (~23 MB,
-  cached by the Cache API after first visit) and the int8 index. It embeds the query, dots it
-  against every emoji (<1 ms), and returns the top hits. Query vectors are memoized.
-- `src/keyword.ts` — a sorted-token prefix index over names + keywords. Synchronous, runs on
-  every keystroke, and catches what embeddings miss ("cele" → 🎉).
-- `src/main.ts` — renders keyword hits immediately, debounces 80 ms, then merges in semantic
-  hits when they arrive: `score = semantic + 0.5 × keyword`. Until the model is ready the
-  picker is keyword-only, and upgrades in place once loading finishes.
-
-## Phrasings
-
-`scripts/phrasings.json` maps emojibase hexcodes to the things people actually type
-("lol", "wfh", "mind blown"). About 1,000 emoji are hand-seeded. To fill in the rest with
-Claude:
-
-```
-export ANTHROPIC_API_KEY=…   # or `ant auth login`
-npm run gen:phrasings        # only emoji without phrasings; add --all to regenerate
-npm run build:index
-```
-
-## Keyboard
-
-| Key | Action |
+| Package | What |
 |---|---|
-| `↵` | Copy the top result |
-| `↓` then arrows | Move around the grid |
-| `Esc` | Clear search / back to the search box |
-| `/` or `⌘K` | Focus the search box |
-| Right-click / long-press | Skin-tone variants |
+| [`packages/emoji-index`](packages/emoji-index) | Offline pipeline: CLDR names + keywords + phrasings → `all-MiniLM-L6-v2` embeddings → int8 `emoji-index.bin` (725 KB) + `emoji-meta.json`. Also downloads the encoder the apps ship. |
+| [`apps/web`](apps/web) | Vite + TypeScript picker. Transformers.js in a Web Worker, deployed to Cloudflare Workers. |
+| [`apps/mac`](apps/mac) | SwiftUI/AppKit menu bar app. ONNX Runtime + a Swift WordPiece tokenizer run the *same* model against the *same* index, so rankings match the web exactly. |
 
-## Scripts
+## Getting started
+
+```
+pnpm install
+pnpm index:fetch-model      # one-time, ~23 MB encoder into packages/emoji-index/models
+pnpm dev                    # web app on http://localhost:5173
+pnpm mac:run                # build + open the macOS app
+```
+
+The index itself (`packages/emoji-index/dist`) is committed, so you only need
+`pnpm index:build` after changing phrasings or the model (~10 s).
+
+## Scripts (root)
 
 | Script | What |
 |---|---|
-| `npm run dev` | Vite dev server |
-| `npm run build` | Production build to `dist/` |
-| `npm run build:index` | Rebuild the embedding index |
-| `npm run gen:phrasings` | Generate phrasings with Claude |
-| `npm run probe -- "query" …` | Print top semantic hits from Node (no browser) |
-| `npm run typecheck` | `tsc` |
+| `pnpm dev` / `pnpm build` / `pnpm deploy` | Web app |
+| `pnpm index:build` | Rebuild the embedding index |
+| `pnpm index:fetch-model` | Download the encoder files |
+| `pnpm index:probe "query" …` | Print top semantic hits from Node |
+| `pnpm mac:build` / `pnpm mac:run` | Assemble / open `apps/mac/build/Emoji Search.app` |
+| `pnpm typecheck` | `tsc` across packages |
 
-## Notes on size
+## How search works
 
-The encoder dominates the download (~23 MB for MiniLM q8, plus ~3 MB gzipped for the ONNX
-runtime wasm; both cached after the first visit). The worker points ORT at the plain
-`ort-wasm-simd-threaded` build rather than the default asyncify build, since the CPU backend
-doesn't need it. Swapping in a Model2Vec table or a distilled student only touches
-`src/worker.ts` (`embed`) and `scripts/build-index.mjs` — the index format and UI don't change.
+Both apps use the same two-stage approach:
+
+1. **Keyword prefix search** over names + keywords runs synchronously on every keystroke
+   (`"cele"` → 🎉). Works before the model has loaded.
+2. **Semantic search**: the query is embedded with MiniLM (q8, ~5–20 ms in the browser,
+   ~1 ms native), dotted against all 1,914 int8 vectors (<1 ms), and merged in after an
+   80 ms debounce: `score = semantic + 0.5 × keyword`.
+
+See each package's README for details.

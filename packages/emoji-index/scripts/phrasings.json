@@ -110,7 +110,7 @@
     "division",
     "split"
   ],
-  "_comment": "Natural-language phrasings people type when they want an emoji, keyed by emojibase hexcode. Hand-seeded for common emoji; run `npm run gen:phrasings` to fill in the rest with an LLM.",
+  "_comment": "Natural-language phrasings people type when they want an emoji, keyed by emojibase hexcode. Hand-seeded for common emoji; run `pnpm gen-phrasings` to fill in the rest with an LLM.",
   "1F600": [
     "feeling great",
     "so happy",

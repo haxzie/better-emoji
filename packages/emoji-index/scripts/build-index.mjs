@@ -2,9 +2,9 @@
 //
 //   1. For each emoji, build text blobs from the CLDR name + keywords + phrasings
 //   2. Embed each blob with all-MiniLM-L6-v2, average, L2-normalize
-//   3. Quantize to int8 and write public/emoji-index.bin + public/emoji-meta.json
+//   3. Quantize to int8 and write dist/emoji-index.bin + dist/emoji-meta.json
 //
-// Run with: npm run build:index
+// Run with: pnpm build
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,7 @@ import compact from 'emojibase-data/en/compact.json' with { type: 'json' };
 import groupMeta from 'emojibase-data/meta/groups.json' with { type: 'json' };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const outDir = path.join(here, '..', 'public');
+const outDir = path.join(here, '..', 'dist');
 const MODEL = 'Xenova/all-MiniLM-L6-v2';
 const DIM = 384;
 const BATCH = 64;

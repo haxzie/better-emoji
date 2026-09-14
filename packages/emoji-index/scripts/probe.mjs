@@ -1,10 +1,10 @@
 // Print the top semantic hits for one or more queries without a browser.
-//   npm run probe -- "ship it" "feeling great"
+//   pnpm probe "ship it" "feeling great"
 import { readFileSync } from 'node:fs';
 import { pipeline } from '@huggingface/transformers';
 
-const meta = JSON.parse(readFileSync('public/emoji-meta.json', 'utf8'));
-const buf = readFileSync('public/emoji-index.bin');
+const meta = JSON.parse(readFileSync(new URL('../dist/emoji-meta.json', import.meta.url), 'utf8'));
+const buf = readFileSync(new URL('../dist/emoji-index.bin', import.meta.url));
 const scales = new Float32Array(buf.buffer, buf.byteOffset, meta.count);
 const vecs = new Int8Array(buf.buffer, buf.byteOffset + meta.count * 4, meta.count * meta.dim);
 const encode = await pipeline('feature-extraction', meta.model, { dtype: 'q8' });

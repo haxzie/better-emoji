@@ -1,10 +1,10 @@
 // Generate natural-language phrasings for every emoji with Claude and merge
 // them into scripts/phrasings.json. Needs ANTHROPIC_API_KEY (or `ant auth login`).
 //
-//   npm run gen:phrasings            # only emoji that have no phrasings yet
-//   npm run gen:phrasings -- --all   # regenerate everything
+//   pnpm gen-phrasings            # only emoji that have no phrasings yet
+//   pnpm gen-phrasings --all   # regenerate everything
 //
-// Then rebuild the index: npm run build:index
+// Then rebuild the index: pnpm build
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -90,4 +90,4 @@ async function worker() {
 }
 
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-console.log('\ndone — now run: npm run build:index');
+console.log('\ndone — now run: pnpm build');
