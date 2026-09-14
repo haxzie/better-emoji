@@ -86,10 +86,16 @@ struct SettingsView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSImage(byReferencing: Bundle.module.url(forResource: "logo", withExtension: "png")!))
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 36, height: 36)
+            // Never Bundle.module: SwiftPM's accessor looks in the build directory, which
+            // only exists on the machine that built it — the CI build crashed on launch.
+            if let url = try? Resources.url(.logo), let logo = NSImage(contentsOf: url) {
+                Image(nsImage: logo)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 36, height: 36)
+            } else {
+                Text("😼").font(.system(size: 30))
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text("Better Emoji")
                     .font(.headline)

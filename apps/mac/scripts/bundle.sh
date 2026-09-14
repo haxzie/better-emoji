@@ -28,8 +28,7 @@ cp .build/release/EmojiSearch "$APP/Contents/MacOS/EmojiSearch"
 cp Info.plist "$APP/Contents/"
 cp "$INDEX_PKG/dist/emoji-index.bin" "$INDEX_PKG/dist/emoji-meta.json" "$APP/Contents/Resources/"
 cp "$MODEL_DIR/onnx/model_quantized.onnx" "$MODEL_DIR/tokenizer.json" "$APP/Contents/Resources/"
-# SwiftPM resource bundle (Settings-window logo); Bundle.module looks for it in Contents/Resources.
-cp -R .build/release/EmojiSearch_EmojiSearch.bundle "$APP/Contents/Resources/"
+cp Sources/EmojiSearch/Resources/logo.png "$APP/Contents/Resources/"
 
 # Stamp the version. The in-app updater compares CFBundleShortVersionString
 # against the latest GitHub release tag, so releases must set this.

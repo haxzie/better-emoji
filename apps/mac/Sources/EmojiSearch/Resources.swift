@@ -11,6 +11,7 @@ enum Resources {
         case index = "emoji-index.bin"
         case model = "model_quantized.onnx"
         case tokenizer = "tokenizer.json"
+        case logo = "logo.png"
 
         /// Path relative to packages/emoji-index during development.
         var devPath: String {
@@ -18,6 +19,7 @@ enum Resources {
             case .meta, .index: return "dist/\(rawValue)"
             case .model: return "models/\(modelName)/onnx/\(rawValue)"
             case .tokenizer: return "models/\(modelName)/\(rawValue)"
+            case .logo: return "../../apps/mac/Sources/EmojiSearch/Resources/\(rawValue)"
             }
         }
     }
