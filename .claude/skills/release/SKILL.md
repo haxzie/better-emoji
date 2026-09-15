@@ -5,6 +5,11 @@ description: Cut, verify, or debug a Better Emoji macOS release — version bump
 
 # Releasing Better Emoji (macOS)
 
+> **Never tag or push a tag without the user's explicit go-ahead for *this* release.**
+> Tagging publishes a public GitHub release, rewrites `latest.json`, and pushes an
+> update to every installed copy. Approval for an earlier release does not carry over.
+> Commit and push the fix, then ask: "Want me to cut vX.Y.Z?" — and wait.
+
 ## The pipeline in one picture
 
 ```
