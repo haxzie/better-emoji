@@ -24,8 +24,8 @@ struct PickerView: View {
     /// Always points at something (the first emoji by default) so ⏎ inserts it.
     /// Hover moves it; ↑↓ move it and start keyboard navigation.
     @State private var selection: Int? = 0
-    /// True once ↑/↓ has been pressed: ←/→ then move the selection instead of the text
-    /// cursor, and selection changes scroll the grid.
+    /// True once an arrow key has been pressed this open: selection changes then scroll
+    /// the grid, and result updates don't reset the selection.
     @State private var navigating = false
     /// Where the pointer was when an arrow key was last pressed. Scrolling the grid
     /// under a stationary mouse fires onHover for whatever slides beneath it, which
@@ -107,8 +107,8 @@ struct PickerView: View {
                 .focused($searchFocused)
                 .onKeyPress(.downArrow) { startNavigating(); moveRow(+1); return .handled }
                 .onKeyPress(.upArrow) { startNavigating(); moveRow(-1); return .handled }
-                .onKeyPress(.leftArrow) { navigating ? moveHandled(by: -1) : .ignored }
-                .onKeyPress(.rightArrow) { navigating ? moveHandled(by: 1) : .ignored }
+                .onKeyPress(.leftArrow) { moveHandled(by: -1) }
+                .onKeyPress(.rightArrow) { moveHandled(by: 1) }
                 .onKeyPress(.return) { pickSelected(); return .handled }
                 .onKeyPress(.escape) {
                     if searching { engine.query = "" } else { panel.onDismiss() }
@@ -163,6 +163,15 @@ struct PickerView: View {
             .onChange(of: selection) { _, s in
                 if navigating, let s { proxy.scrollTo(s) }
             }
+            // The grid keeps its scroll offset while hidden; every open starts at the top,
+            // where the selection is.
+            .onChange(of: panel.shownCount) { _, _ in
+                if searching { proxy.scrollTo(0, anchor: .top) }
+                else if let c = sections.first?.category { proxy.scrollTo(c, anchor: .top) }
+            }
+            .onChange(of: engine.query) { _, q in
+                if q.isEmpty, let c = sections.first?.category { proxy.scrollTo(c, anchor: .top) }
+            }
         }
     }
 
@@ -184,8 +193,9 @@ struct PickerView: View {
             .frame(width: Self.cellSize, height: Self.cellSize)
             .background(
                 // Same fill as the search field so the two read as one system.
+                // Solid enough to read over any backdrop the glass picks up.
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.quaternary.opacity(highlighted ? 0.55 : 0))
+                    .fill(.primary.opacity(highlighted ? 0.16 : 0))
             )
             .contentShape(Rectangle())
             .onHover { inside in
