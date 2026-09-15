@@ -137,6 +137,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func typeKey(_ chars: String, modifiers: NSEvent.ModifierFlags = []) {
+        // Arrow glyphs in the harness string become real arrow key events.
+        let arrows: [String: (UInt16, String)] = [
+            "↓": (125, "\u{F701}"), "↑": (126, "\u{F700}"), "←": (123, "\u{F702}"), "→": (124, "\u{F703}"),
+        ]
+        if let (code, fn) = arrows[chars] {
+            for down in [true, false] {
+                if let ev = NSEvent.keyEvent(with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: [.function, .numericPad],
+                                             timestamp: 0, windowNumber: panel.windowNumber, context: nil,
+                                             characters: fn, charactersIgnoringModifiers: fn, isARepeat: false, keyCode: code) {
+                    NSApp.sendEvent(ev)
+                }
+            }
+            return
+        }
         // Real ⌃/⌘ key events carry the control character in `characters`.
         let characters = modifiers.contains(.control)
             ? String(chars.unicodeScalars.compactMap { Unicode.Scalar($0.value & 0x1F) }.map(Character.init))

@@ -27,6 +27,11 @@ struct PickerView: View {
     /// True once ↑/↓ has been pressed: ←/→ then move the selection instead of the text
     /// cursor, and selection changes scroll the grid.
     @State private var navigating = false
+    /// Where the pointer was when an arrow key was last pressed. Scrolling the grid
+    /// under a stationary mouse fires onHover for whatever slides beneath it, which
+    /// would yank the selection away from the keyboard; hover only wins once the
+    /// pointer has really moved.
+    @State private var mouseAtLastKey: NSPoint?
     @State private var recent: [Emoji] = []
     /// Cell showing the "picked" check while the panel lingers before closing.
     @State private var picked: Int?
@@ -81,6 +86,8 @@ struct PickerView: View {
             recent = engine.store.recent
             selection = 0
             navigating = false
+            picked = nil
+            mouseAtLastKey = nil
             searchFocused = true
         }
         .onChange(of: engine.query) { _, _ in selection = 0; navigating = false }
@@ -98,8 +105,8 @@ struct PickerView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .focused($searchFocused)
-                .onKeyPress(.downArrow) { navigating = true; move(by: Self.columns); return .handled }
-                .onKeyPress(.upArrow) { navigating = true; move(by: -Self.columns); return .handled }
+                .onKeyPress(.downArrow) { startNavigating(); moveRow(+1); return .handled }
+                .onKeyPress(.upArrow) { startNavigating(); moveRow(-1); return .handled }
                 .onKeyPress(.leftArrow) { navigating ? moveHandled(by: -1) : .ignored }
                 .onKeyPress(.rightArrow) { navigating ? moveHandled(by: 1) : .ignored }
                 .onKeyPress(.return) { pickSelected(); return .handled }
@@ -182,7 +189,10 @@ struct PickerView: View {
             )
             .contentShape(Rectangle())
             .onHover { inside in
-                if inside { selection = position }
+                guard inside else { return }
+                if let m = mouseAtLastKey, hypot(NSEvent.mouseLocation.x - m.x, NSEvent.mouseLocation.y - m.y) < 3 { return }
+                mouseAtLastKey = nil
+                selection = position
             }
             .overlay { if picked == position { PickedBadge() } }
             .onTapGesture { pick(e, e.char, at: position) }
@@ -265,6 +275,12 @@ struct PickerView: View {
 
     // MARK: - Actions
 
+    private func startNavigating() {
+        navigating = true
+        mouseAtLastKey = NSEvent.mouseLocation
+    }
+
+    /// ←/→: one cell along the flat list (crossing sections is fine).
     private func move(by delta: Int) {
         let list = visible
         guard !list.isEmpty else { return }
@@ -273,8 +289,38 @@ struct PickerView: View {
     }
 
     private func moveHandled(by delta: Int) -> KeyPress.Result {
+        startNavigating()
         move(by: delta)
         return .handled
+    }
+
+    /// ↑/↓: the cell directly above/below on screen. Every section starts a new row,
+    /// so this is done in (section, row, column) space rather than on the flat list:
+    /// stay in the column, and when there's no row left in this section, continue
+    /// into the neighbouring section's nearest row.
+    private func moveRow(_ dir: Int) {
+        let secs = sections
+        guard !secs.isEmpty else { return }
+        let cols = Self.columns
+        guard let cur = selection else { selection = 0; return }
+        guard let si = secs.lastIndex(where: { $0.start <= cur }) else { selection = 0; return }
+        let sec = secs[si]
+        let local = cur - sec.start
+        let row = local / cols, col = local % cols
+        let rows = (sec.emoji.count + cols - 1) / cols
+
+        let targetRow = row + dir
+        if targetRow >= 0 && targetRow < rows {
+            let idx = min(targetRow * cols + col, sec.emoji.count - 1)
+            selection = sec.start + idx
+            return
+        }
+        let ni = si + dir
+        guard secs.indices.contains(ni) else { return }  // top/bottom of the grid: stay put
+        let next = secs[ni]
+        let nextRows = (next.emoji.count + cols - 1) / cols
+        let r = dir > 0 ? 0 : nextRows - 1
+        selection = next.start + min(r * cols + col, next.emoji.count - 1)
     }
 
     private var selectedEmoji: Emoji? {
@@ -295,9 +341,10 @@ struct PickerView: View {
         engine.store.touchRecent(e)
         picked = position
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("pick → onPick")
+            // Clear the badge *before* hiding: state changes made while the window is
+            // ordered out aren't reliably rendered, and the check came back next open.
+            picked = nil
             panel.onPick(e, char)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("pick → clear badge"); picked = nil }
         }
     }
 }
