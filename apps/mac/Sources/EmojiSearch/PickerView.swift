@@ -41,6 +41,26 @@ struct PickerView: View {
         let start: Int
         let emoji: [Emoji]
         var id: Int { category.rawValue }
+        var cells: [Cell] { emoji.enumerated().map { Cell(section: category, position: start + $0.offset, emoji: $0.element) } }
+    }
+
+    /// Identity is *which* emoji in *which* section, never its position: positions shift
+    /// whenever Recent changes, and the lazy grid keeps stale views for ids it has seen
+    /// (the first render, before recents load, had Smileys at 0…n; Recent then took
+    /// those ids and showed smileys). An emoji can be in Recent and its own group, so
+    /// the section is part of the id.
+    private struct Cell: Identifiable {
+        let section: Category
+        let position: Int
+        let emoji: Emoji
+        var id: Int { Self.id(section, emoji) }
+        static func id(_ section: Category, _ emoji: Emoji) -> Int { (section.rawValue + 1) * 100_000 + emoji.id }
+    }
+
+    private func cellID(at position: Int) -> Int? {
+        guard let sec = sections.last(where: { $0.start <= position }),
+              sec.emoji.indices.contains(position - sec.start) else { return nil }
+        return Cell.id(sec.category, sec.emoji[position - sec.start])
     }
 
     private var searching: Bool { !engine.query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -144,8 +164,8 @@ struct PickerView: View {
                     ) {
                         ForEach(sections) { section in
                             SwiftUI.Section {
-                                ForEach(Array(section.emoji.enumerated()), id: \.offset) { i, e in
-                                    cell(e, position: section.start + i)
+                                ForEach(section.cells) { c in
+                                    cell(c.emoji, position: c.position, id: c.id)
                                 }
                             } header: {
                                 if !searching { sectionHeader(section.category) }
@@ -161,12 +181,12 @@ struct PickerView: View {
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(c, anchor: .top) }
             }
             .onChange(of: selection) { _, s in
-                if navigating, let s { proxy.scrollTo(s) }
+                if navigating, let s, let id = cellID(at: s) { proxy.scrollTo(id) }
             }
             // The grid keeps its scroll offset while hidden; every open starts at the top,
             // where the selection is.
             .onChange(of: panel.shownCount) { _, _ in
-                if searching { proxy.scrollTo(0, anchor: .top) }
+                if searching, let id = cellID(at: 0) { proxy.scrollTo(id, anchor: .top) }
                 else if let c = sections.first?.category { proxy.scrollTo(c, anchor: .top) }
             }
             .onChange(of: engine.query) { _, q in
@@ -186,7 +206,7 @@ struct PickerView: View {
             .id(c)
     }
 
-    private func cell(_ e: Emoji, position: Int) -> some View {
+    private func cell(_ e: Emoji, position: Int, id: Int) -> some View {
         let highlighted = selection == position
         return Text(e.char)
             .font(.system(size: 32))
@@ -215,7 +235,7 @@ struct PickerView: View {
                     Button("Copy \(e.char)") { pick(e, e.char, at: position) }
                 }
             }
-            .id(position)
+            .id(id)
     }
 
     private var emptyState: some View {
