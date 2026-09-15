@@ -145,7 +145,10 @@ final class PickerPanel: NSPanel {
         if let field = contentView.flatMap(find) { makeFirstResponder(field) }
     }
 
-    func hide() {
+    /// `completion` runs once the window is actually ordered out — anything that must
+    /// reach the app underneath (the paste keystroke) has to wait for that, not for the
+    /// start of the fade.
+    func hide(completion: (() -> Void)? = nil) {
         guard !hiding else { Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("hide ignored: already hiding"); return }
         Logger(subsystem: "com.haxzie.better-emoji", category: "pick").info("hide: start (visible=\(self.isVisible) key=\(self.isKeyWindow))")
         hiding = true
@@ -158,6 +161,7 @@ final class PickerPanel: NSPanel {
             self.alphaValue = 1
             self.hiding = false
             self.onHide?()
+            completion?()
         }
     }
 }

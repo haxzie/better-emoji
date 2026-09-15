@@ -31,11 +31,14 @@ enum Inserter {
         guard canPaste else { original = nil; return false }  // copy-only: leave it on the clipboard
         original = saved
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            // ⌘V goes to the *active* app. If that's us (it is, after the Settings window
-            // has been open), hand activation back to the app the picker was opened over.
+        // The panel is already ordered out when we get here (see onPick); a short beat
+        // lets the window server settle key status before the keystroke.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            // ⌘V goes to the *active* app. If we think that's us (it is, after the Settings
+            // window has been open), hand activation back to the app the picker was opened
+            // over — unconditionally: the system's and our own notion of "active" disagree.
             var delay: TimeInterval = 0
-            if NSApp.isActive, let target, !target.isActive {
+            if NSApp.isActive, let target {
                 log.info("we're active — activating \(target.localizedName ?? "?", privacy: .public) first")
                 target.activate()
                 delay = 0.12

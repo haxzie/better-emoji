@@ -65,9 +65,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         panel.onHide = { [weak self] in self?.engine.query = "" }
 
         panelState.onPick = { [weak self] _, char in
-            self?.panel.hide()
-            let pasted = Inserter.insert(char, into: self?.panel.targetApp)
-            if !pasted { self?.showCopiedFeedback(char) }
+            guard let self else { return }
+            let target = panel.targetApp
+            // Paste only once the panel is gone: while it's still ordered in (even mid-fade)
+            // it is the key window and swallows the ⌘V.
+            panel.hide { [weak self] in
+                let pasted = Inserter.insert(char, into: target)
+                if !pasted { self?.showCopiedFeedback(char) }
+            }
         }
         panelState.onDismiss = { [weak self] in self?.panel.hide() }
 
