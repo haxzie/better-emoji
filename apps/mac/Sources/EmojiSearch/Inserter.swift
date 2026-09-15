@@ -11,15 +11,26 @@ enum Inserter {
 
     /// Puts the emoji into the active app.
     /// - Returns: `true` if it pasted via Cmd+V (Accessibility granted), `false` if clipboard-only.
+    /// Restore scheduled by the last insert, and what the user had on the clipboard
+    /// before we took it. Consecutive picks used to race: pick #2 snapshotted pick #1's
+    /// emoji as the "original", then pick #1's restore fired and swapped the clipboard
+    /// back before ⌘V #2 was processed — so nothing (or the wrong thing) got pasted.
+    private static var pendingRestore: DispatchWorkItem?
+    private static var original: [[NSPasteboard.PasteboardType: Data]]?
+
     @discardableResult
     static func insert(_ text: String, into target: NSRunningApplication? = nil) -> Bool {
         let pb = NSPasteboard.general
-        let saved = snapshot(pb)
+        // If a restore is still pending, we own the clipboard: keep the user's real
+        // original rather than snapshotting our previous emoji.
+        pendingRestore?.cancel()
+        let saved = original ?? snapshot(pb)
         pb.clearContents()
         pb.setString(text, forType: .string)
         log.info("insert \(text, privacy: .public): trusted=\(canPaste) target=\(target?.localizedName ?? "?", privacy: .public) weAreActive=\(NSApp.isActive)")
-        guard canPaste else { return false }
-        // Give the panel a beat to close so the keystroke lands in the previous app.
+        guard canPaste else { original = nil; return false }  // copy-only: leave it on the clipboard
+        original = saved
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             // ⌘V goes to the *active* app. If that's us (it is, after the Settings window
             // has been open), hand activation back to the app the picker was opened over.
@@ -32,7 +43,15 @@ enum Inserter {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 log.info("posting ⌘V; front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?", privacy: .public)")
                 postCommandV()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { restore(pb, saved) }
+                // Long enough for slow (Electron) apps to service the paste; cancelled and
+                // superseded if another pick comes first.
+                let work = DispatchWorkItem {
+                    restore(pb, saved)
+                    original = nil
+                    pendingRestore = nil
+                }
+                pendingRestore = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
             }
         }
         return true
